@@ -25,9 +25,6 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  # --------------------------
-  # Detect PyMOL version
-  # --------------------------
   detect-version:
     name: Detect PyMOL Version
     runs-on: ubuntu-latest
@@ -41,29 +38,19 @@ jobs:
           if [ "${{ env.PYMOL_VERSION }}" = "latest" ]; then
             # Fetch latest tag from PyMOL upstream
             VERSION=$(curl -s https://api.github.com/repos/schrodinger/pymol-open-source/tags | jq -r '.[0].name // empty')
-
             if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
               echo "❌ Failed to fetch latest PyMOL version"
               exit 1
             fi
-
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-
           else
-
             VERSION="${{ env.PYMOL_VERSION }}"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-
           fi
           echo "🔍 Using PyMOL version: $VERSION"
-
-  # --------------------------
-  # Build Linux wheels
-  # --------------------------
   build-Linux:
     runs-on: ubuntu-22.04
     needs: detect-version
-    timeout-minutes: 60
 
     strategy:
       matrix:
@@ -71,8 +58,7 @@ jobs:
         python-version: ["3.12"]
 
     steps:
-      - name: Checkout PyMOL source
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: schrodinger/pymol-open-source
           ref: ${{ needs.detect-version.outputs.pymol_version }}
@@ -94,17 +80,14 @@ jobs:
               libnetcdf-dev \
               libpng-dev \
               libxml2-dev
-
       - name: Install collada2gltf
         run: |
           wget -nv https://anaconda.org/schrodinger/collada2gltf/2.1.4/download/linux-64/collada2gltf-2.1.4-h6bb024c_0.tar.bz2
           sudo tar xf collada2gltf-*.tar.bz2 -C / bin/collada2gltf
-
       - name: Get additional sources
         run: |
           git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
           cp -R mmtf-cpp/include/* include/
-
       - name: Build
         run: |
           pip install --upgrade pip
@@ -115,7 +98,6 @@ jobs:
       - name: Test
         run: |
           pymol -ckqy testing/testing.py --run all
-
       - name: Build wheel
         run: |
           pip install --upgrade pip build wheel
@@ -129,9 +111,6 @@ jobs:
           name: pymol-wheel-linux-py${{ matrix.python-version }}
           path: dist/*.whl
 
-  # --------------------------
-  # Build Windows wheels
-  # --------------------------
   # build-Windows:
   #   runs-on: windows-latest
   #   needs: detect-version
@@ -207,28 +186,21 @@ jobs:
   #         name: pymol-wheel-windows-py${{ matrix.python-version }}
   #         path: dist/*.whl
 
-  # --------------------------
-  # Build MacOS wheels
-  # --------------------------
   build-MacOS:
     runs-on: macos-latest
     needs: detect-version
-    timeout-minutes: 60
 
     strategy:
       matrix:
-        os: [macos-13, macos-latest] # Intel and ARM64
         # python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
         python-version: ["3.12"]
-      fail-fast: true
 
     env:
       CONDA_ROOT: "/tmp/miniforge"
       CONDA_ENV_NAME: "testing_env"
 
     steps:
-      - name: Checkout PyMOL source
-        uses: actions/checkout@v4.0.0
+      - uses: actions/checkout@v4.0.0
         with:
           repository: schrodinger/pymol-open-source
           ref: ${{ needs.detect-version.outputs.pymol_version }}
@@ -237,11 +209,9 @@ jobs:
         run: |
           curl -L -o $CONDA_ROOT.sh https://github.com/conda-forge/miniforge/releases/download/24.11.0-0/Miniforge3-MacOSX-x86_64.sh
           bash $CONDA_ROOT.sh -b -p $CONDA_ROOT
-
       - name: Add conda to PATH
         run: |
           echo "${CONDA_ROOT}/bin" >> "$GITHUB_PATH"
-
       - name: Set up Miniforge
         run: |
           conda create --name $CONDA_ENV_NAME -c conda-forge -c schrodinger \
@@ -255,7 +225,6 @@ jobs:
               libpng \
               libxml2 \
               libnetcdf
-
       - name: Get additional sources
         run: |
           source activate $CONDA_ENV_NAME
@@ -263,165 +232,155 @@ jobs:
           cp -R mmtf-cpp/include/* ${CONDA_PREFIX}/include/
           git clone --depth 1 --single-branch --branch cpp_master https://github.com/msgpack/msgpack-c.git
           cp -R msgpack-c/include/* ${CONDA_PREFIX}/include/
-
       - name: Build PyMOL
         run: |
           source activate $CONDA_ENV_NAME
           export MACOSX_DEPLOYMENT_TARGET=12.0
           pip install -v --config-settings testing=True '.[dev]'
-
       - name: Test
         run: |
           source activate $CONDA_ENV_NAME
           pymol -ckqy testing/testing.py --run all
-
       - name: Build wheel
         run: |
           source activate $CONDA_ENV_NAME
           export MACOSX_DEPLOYMENT_TARGET=12.0
           pip install --upgrade pip build wheel
           python setup.py bdist_wheel --testing=false
-
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
           name: pymol-wheel-macos-${{ matrix.os == 'macos-13' && 'x86_64' || 'arm64' }}-py${{ matrix.python-version }}
           path: dist/*.whl
 
-  # --------------------------
-  # Create GitHub Release
-  # --------------------------
-  # github-release:
-  #   name: Create GitHub Release
-  #   needs:
-  #     - detect-version
-  #     - build-linux
-  #     # - build-windows
-  #     - build-macos
-  #   runs-on: ubuntu-latest
-  #   if: github.event_name == 'workflow_dispatch'
-  #   permissions:
-  #     contents: write
+  github-release:
+    name: Create GitHub Release
+    needs:
+      - detect-version
+      - build-linux
+      # - build-windows
+      - build-macos
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
 
-  #   steps:
-  #     - name: Download all artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         path: artifacts
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-  #     - name: Prepare release assets
-  #       run: |
-  #         mkdir release-assets
-  #         find artifacts -name "*.whl" -exec cp {} release-assets/ \;
-  #         echo "Release assets:"
-  #         ls -la release-assets/
+      - name: Prepare release assets
+        run: |
+          mkdir release-assets
+          find artifacts -name "*.whl" -exec cp {} release-assets/ \;
+          echo "Release assets:"
+          ls -la release-assets/
 
-  #     - name: Create GitHub release with wheels
-  #       uses: actions/github-script@v7
-  #       with:
-  #         script: |
-  #           const fs = require('fs');
-  #           const path = require('path');
-  #           const pymolVersion = '${{ needs.detect-version.outputs.pymol_version }}';
-  #           const tagName = `pymol-open-source-${pymolVersion}`;
-  #           const releaseName = `PyMOL ${pymolVersion} Wheels`;
+      - name: Create GitHub release with wheels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const pymolVersion = '${{ needs.detect-version.outputs.pymol_version }}';
+            const tagName = `pymol-open-source-${pymolVersion}`;
+            const releaseName = `PyMOL ${pymolVersion} Wheels`;
 
-  #           try {
-  #             // Create the release
-  #             const release = await github.rest.repos.createRelease({
-  #               owner: context.repo.owner,
-  #               repo: context.repo.repo,
-  #               tag_name: tagName,
-  #               name: releaseName,
-  #               body: `PyMOL ${pymolVersion} wheels built and ready for download!
+            try {
+              // Create the release
+              const release = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tagName,
+                name: releaseName,
+                body: `PyMOL ${pymolVersion} wheels built and ready for download!
 
-  #           **PyMOL Version:** ${pymolVersion}
-  #           **Source:** https://github.com/schrodinger/pymol-open-source/releases/tag/${pymolVersion}
+            **PyMOL Version:** ${pymolVersion}
+            **Source:** https://github.com/schrodinger/pymol-open-source/releases/tag/${pymolVersion}
 
-  #           ## Installation
+            ## Installation
 
-  #           Download the wheel file for your platform and install with:
-  #           \`\`\`bash
-  #           pip install pymol_open_source-${pymolVersion}-*.whl
-  #           \`\`\`
+            Download the wheel file for your platform and install with:
+            \`\`\`bash
+            pip install pymol_open_source-${pymolVersion}-*.whl
+            \`\`\`
 
-  #           Or install from PyPI:
-  #           \`\`\`bash
-  #           pip install pymol-open-source
-  #           \`\`\`
+            Or install from PyPI:
+            \`\`\`bash
+            pip install pymol-open-source
+            \`\`\`
 
-  #           ## What's included
+            ## What's included
 
-  #           - Linux wheels (x86_64)
-  #           - Windows wheels (x86_64)
-  #           - macOS wheels (x86_64)
-  #           - Python 3.9, 3.10, 3.11, 3.12, 3.13 support
+            - Linux wheels (x86_64)
+            - Windows wheels (x86_64)
+            - macOS wheels (x86_64)
+            - Python 3.9, 3.10, 3.11, 3.12, 3.13 support
 
-  #           Built automatically from PyMOL upstream release using official build instructions.`,
-  #               draft: false,
-  #               prerelease: false
-  #             });
+            Built automatically from PyMOL upstream release using official build instructions.`,
+                draft: false,
+                prerelease: false
+              });
 
-  #             console.log('✅ GitHub release created:', release.data.html_url);
+              console.log('✅ GitHub release created:', release.data.html_url);
 
-  #             // Upload wheel files as release assets
-  #             const assetsDir = './release-assets';
-  #             const files = fs.readdirSync(assetsDir);
+              // Upload wheel files as release assets
+              const assetsDir = './release-assets';
+              const files = fs.readdirSync(assetsDir);
 
-  #             for (const file of files) {
-  #               if (file.endsWith('.whl')) {
-  #                 const filePath = path.join(assetsDir, file);
-  #                 const fileContent = fs.readFileSync(filePath);
+              for (const file of files) {
+                if (file.endsWith('.whl')) {
+                  const filePath = path.join(assetsDir, file);
+                  const fileContent = fs.readFileSync(filePath);
 
-  #                 await github.rest.repos.uploadReleaseAsset({
-  #                   owner: context.repo.owner,
-  #                   repo: context.repo.repo,
-  #                   release_id: release.data.id,
-  #                   name: file,
-  #                   data: fileContent,
-  #                 });
+                  await github.rest.repos.uploadReleaseAsset({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    release_id: release.data.id,
+                    name: file,
+                    data: fileContent,
+                  });
 
-  #                 console.log(`✅ Uploaded ${file} to release`);
-  #               }
-  #             }
+                  console.log(`✅ Uploaded ${file} to release`);
+                }
+              }
 
-  #           } catch (error) {
-  #             if (error.message.includes('already_exists')) {
-  #               console.log('⚠️ Release already exists, skipping creation');
-  #             } else {
-  #               console.error('❌ Failed to create GitHub release:', error.message);
-  #               throw error;
-  #             }
-  #           }
+            } catch (error) {
+              if (error.message.includes('already_exists')) {
+                console.log('⚠️ Release already exists, skipping creation');
+              } else {
+                console.error('❌ Failed to create GitHub release:', error.message);
+                throw error;
+              }
+            }
 
-  # # --------------------------
-  # # Publish to PyPI
-  # # --------------------------
-  # publish:
-  #   name: Publish Wheels to PyPI
-  #   needs:
-  #     - detect-version
-  #     - build-linux
-  #     # - build-windows
-  #     - build-macos
-  #   runs-on: ubuntu-latest
-  #   if: github.event_name == 'workflow_dispatch' && inputs.publish_to_pypi
+  publish:
+    name: Publish Wheels to PyPI
+    needs:
+      - detect-version
+      - build-linux
+      # - build-windows
+      - build-macos
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_to_pypi
 
-  #   steps:
-  #     - name: Download all artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         path: dist
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
 
-  #     - name: Combine all wheels
-  #       run: |
-  #         mkdir final_dist
-  #         find dist -name "*.whl" -exec cp {} final_dist/ \;
-  #         echo "Wheels to publish:"
-  #         ls -la final_dist/
+      - name: Combine all wheels
+        run: |
+          mkdir final_dist
+          find dist -name "*.whl" -exec cp {} final_dist/ \;
+          echo "Wheels to publish:"
+          ls -la final_dist/
 
-  #     - name: Publish to PyPI
-  #       uses: pypa/gh-action-pypi-publish@release/v1
-  #       with:
-  #         password: ${{ secrets.PYPI_API_TOKEN }}
-  #         packages-dir: final_dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: final_dist
