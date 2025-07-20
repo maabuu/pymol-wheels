@@ -1,9 +1,19 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish_to_pypi:
+        description: "Publish wheels to PyPI"
+        required: false
+        default: false
+        type: boolean
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  PYMOL_VERSION: latest # Add this line
 
 jobs:
   detect-version:
@@ -350,8 +360,6 @@ jobs:
             const releaseName = `PyMOL ${pymolVersion} Wheels`;
 
             try {
-              const pymolVersion = '${{ needs.detect-version.outputs.pymol_version }}';
-
               // Create the release
               const release = await github.rest.repos.createRelease({
                 owner: context.repo.owner,
