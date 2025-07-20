@@ -1,4 +1,3 @@
-name: Build & Publish PyMOL Wheels
 
 on:
   workflow_dispatch:
@@ -258,66 +257,6 @@ jobs:
           curl -L -o $CONDA_ROOT.sh "https://github.com/conda-forge/miniforge/releases/download/24.11.0-0/Miniforge3-MacOSX-${ARCH}.sh"
           bash $CONDA_ROOT.sh -b -p $CONDA_ROOT
 
-      - name: Add conda to PATH
-        run: |
-          echo "${CONDA_ROOT}/bin" >> "$GITHUB_PATH"
-
-      - name: Set up Miniforge
-        run: |
-          conda create --name $CONDA_ENV_NAME -c conda-forge -c schrodinger \
-              python=${{ matrix.python-version }} \
-              pip \
-              catch2=2.13.3 \
-              collada2gltf \
-              freetype \
-              glew \
-              glm \
-              libpng \
-              libxml2 \
-              libnetcdf
-
-      - name: Get additional sources
-        run: |
-          source activate $CONDA_ENV_NAME
-          git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
-          cp -R mmtf-cpp/include/* ${CONDA_PREFIX}/include/
-          git clone --depth 1 --single-branch --branch cpp_master https://github.com/msgpack/msgpack-c.git
-          cp -R msgpack-c/include/* ${CONDA_PREFIX}/include/
-
-      - name: Build
-        run: |
-          source activate $CONDA_ENV_NAME
-          export MACOSX_DEPLOYMENT_TARGET=12.0
-          pip install -v --config-settings testing=True '.[dev]'
-        env:
-          DEBUG: 1
-
-      - name: Test
-        if: ${{ inputs.run_tests }}
-        run: |
-          source activate $CONDA_ENV_NAME
-          pymol -ckqy testing/testing.py --run all
-        env:
-          DEBUG: 1
-
-      - name: Build wheel
-        run: |
-          source activate $CONDA_ENV_NAME
-          export MACOSX_DEPLOYMENT_TARGET=12.0
-          pip install --upgrade pip build wheel
-          python -m build --wheel
-        env:
-          DEBUG: 1
-
-      - name: Upload wheel
-        uses: actions/upload-artifact@v4
-        with:
-          name: pymol-wheel-macos-${{ matrix.os == 'macos-13' && 'x86_64' || 'arm64' }}-py${{ matrix.python-version }}
-          path: $GITHUB_WORKSPACE/dist/*.whl
-
-  # --------------------------
-  # Create GitHub Release
-  # --------------------------
   github-release:
     name: Create GitHub Release
     needs: [detect-version, build-linux, build-windows, build-macos]
