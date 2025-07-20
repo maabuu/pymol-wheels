@@ -402,7 +402,7 @@ jobs:
     needs:
       - detect-version
       - build-linux
-      - build-windows
+      # - build-windows
       - build-macos
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && inputs.publish_to_pypi
