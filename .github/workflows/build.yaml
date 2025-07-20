@@ -1,0 +1,248 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  detect-version:
+    name: Detect PyMOL Version
+    runs-on: ubuntu-latest
+    outputs:
+      pymol_version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Determine PyMOL version
+        id: version
+        run: |
+          if [ "${{ env.PYMOL_VERSION }}" = "latest" ]; then
+            # Fetch latest tag from PyMOL upstream
+            VERSION=$(curl -s https://api.github.com/repos/schrodinger/pymol-open-source/tags | jq -r '.[0].name // empty')
+
+            if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+              echo "❌ Failed to fetch latest PyMOL version"
+              exit 1
+            fi
+
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          else
+
+            VERSION="${{ env.PYMOL_VERSION }}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          fi
+          echo "🔍 Using PyMOL version: $VERSION"
+
+  build-Linux:
+    runs-on: ubuntu-22.04
+    needs: detect-version
+
+    strategy:
+      matrix:
+        # python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        pythin-version: ["3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: schrodinger/pymol-open-source
+          ref: ${{ needs.detect-version.outputs.pymol_version }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get --no-install-recommends install \
+              catch2 \
+              libfreetype6-dev \
+              libglew-dev \
+              libglm-dev \
+              libmsgpack-dev \
+              libnetcdf-dev \
+              libpng-dev \
+              libxml2-dev
+
+      - name: Install collada2gltf
+        run: |
+          wget -nv https://anaconda.org/schrodinger/collada2gltf/2.1.4/download/linux-64/collada2gltf-2.1.4-h6bb024c_0.tar.bz2
+          sudo tar xf collada2gltf-*.tar.bz2 -C / bin/collada2gltf
+
+      - name: Get additional sources
+        run: |
+          git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
+          cp -R mmtf-cpp/include/* include/
+
+      - name: Build
+        run: |
+          pip install --upgrade pip
+          pip install -v --config-settings testing=True '.[dev]'
+        env:
+          DEBUG: 1
+
+      - name: Test
+        run: |
+          pymol -ckqy testing/testing.py --run all
+
+      - name: Build wheel
+        run: |
+          pip install --upgrade pip build wheel
+          python -m build --wheel
+        env:
+          DEBUG: 1
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: pymol-wheel-linux-py${{ matrix.python-version }}
+          path: $GITHUB_WORKSPACE/dist/*.whl
+
+  build-Windows:
+    runs-on: windows-latest
+    needs: detect-version
+
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
+    env:
+      CONDA_ENV_NAME: "testing_env"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: schrodinger/pymol-open-source
+          ref: ${{ needs.detect-version.outputs.pymol_version }}
+
+      - name: Install Miniforge
+        run: |
+          choco install miniforge3
+
+      - name: Add conda to PATH
+        run: |
+          echo "$env:CONDA" | Out-File -Append -FilePath $env:GITHUB_PATH
+          echo "$env:CONDA\Scripts" | Out-File -Append -FilePath $env:GITHUB_PATH
+
+      - name: Set up Miniforge
+        run: |
+          conda init powershell
+          conda create --name $env:CONDA_ENV_NAME -c conda-forge -c schrodinger `
+              python=${{ matrix.python-version }} `
+              pip `
+              catch2=2.13.3 `
+              collada2gltf `
+              freetype `
+              glew `
+              glm `
+              libpng `
+              libxml2 `
+              libnetcdf `
+
+      - name: Get additional sources
+        run: |
+          conda activate $env:CONDA_ENV_NAME
+
+          git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
+          Copy-Item -Recurse -Path mmtf-cpp/include\* -Destination "$env:CONDA_PREFIX\Library\include"
+          git clone --depth 1 --single-branch --branch cpp_master https://github.com/msgpack/msgpack-c.git
+          Copy-Item -Recurse -Path msgpack-c/include\* -Destination "$env:CONDA_PREFIX\Library\include"
+          dir $env:CONDA_PREFIX\Library\include
+
+      - name: Build PyMOL
+        run: |
+          conda activate $env:CONDA_ENV_NAME
+          pip install -v --config-settings testing=True .[dev]
+
+      - name: Test
+        run: |
+          conda activate $env:CONDA_ENV_NAME
+          pymol -ckqy testing\testing.py --run all
+
+      - name: Build wheel
+        run: |
+          conda activate $env:CONDA_ENV_NAME
+          pip install --upgrade pip build wheel
+          python -m build --wheel
+        env:
+          DEBUG: 1
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: pymol-wheel-windows-py${{ matrix.python-version }}
+          path: $GITHUB_WORKSPACE/dist/*.whl
+
+  build-MacOS:
+    runs-on: macos-latest
+    needs: detect-version
+
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
+    env:
+      CONDA_ROOT: "/tmp/miniforge"
+      CONDA_ENV_NAME: "testing_env"
+
+    steps:
+      - uses: actions/checkout@v4.0.0
+        with:
+          repository: schrodinger/pymol-open-source
+          ref: ${{ needs.detect-version.outputs.pymol_version }}
+
+      - name: Download Miniforge
+        run: |
+          curl -L -o $CONDA_ROOT.sh https://github.com/conda-forge/miniforge/releases/download/24.11.0-0/Miniforge3-MacOSX-x86_64.sh
+          bash $CONDA_ROOT.sh -b -p $CONDA_ROOT
+
+      - name: Add conda to PATH
+        run: |
+          echo "${CONDA_ROOT}/bin" >> "$GITHUB_PATH"
+
+      - name: Set up Miniforge
+        run: |
+          conda create --name $CONDA_ENV_NAME -c conda-forge -c schrodinger \
+              python=${{ matrix.python-version }} \
+              pip \
+              catch2=2.13.3 \
+              collada2gltf \
+              freetype \
+              glew \
+              glm \
+              libpng \
+              libxml2 \
+              libnetcdf
+
+      - name: Get additional sources
+        run: |
+          source activate $CONDA_ENV_NAME
+          git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
+          cp -R mmtf-cpp/include/* ${CONDA_PREFIX}/include/
+          git clone --depth 1 --single-branch --branch cpp_master https://github.com/msgpack/msgpack-c.git
+          cp -R msgpack-c/include/* ${CONDA_PREFIX}/include/
+
+      - name: Build PyMOL
+        run: |
+          source activate $CONDA_ENV_NAME
+          export MACOSX_DEPLOYMENT_TARGET=12.0
+          pip install -v --config-settings testing=True '.[dev]'
+
+      - name: Test
+        run: |
+          source activate $CONDA_ENV_NAME
+          pymol -ckqy testing/testing.py --run all
+
+      - name: Build wheel
+        run: |
+          source activate $CONDA_ENV_NAME
+          export MACOSX_DEPLOYMENT_TARGET=12.0
+          pip install --upgrade pip build wheel
+          python -m build --wheel
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: pymol-wheel-macos-${{ matrix.os == 'macos-13' && 'x86_64' || 'arm64' }}-py${{ matrix.python-version }}
+          path: $GITHUB_WORKSPACE/dist/*.whl
