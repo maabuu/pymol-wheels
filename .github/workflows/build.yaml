@@ -343,10 +343,15 @@ jobs:
             const fs = require('fs');
             const path = require('path');
             const pymolVersion = '${{ needs.detect-version.outputs.pymol_version }}';
+            if (!pymolVersion || !/^[A-Za-z0-9._\-]+$/.test(pymolVersion)) {
+              throw new Error(`Invalid pymolVersion: "${pymolVersion}". Aborting release.`);
+            }
             const tagName = `pymol-open-source-${pymolVersion}`;
             const releaseName = `PyMOL ${pymolVersion} Wheels`;
 
             try {
+              const pymolVersion = '${{ needs.detect-version.outputs.pymol_version }}';
+
               // Create the release
               const release = await github.rest.repos.createRelease({
                 owner: context.repo.owner,
@@ -378,7 +383,7 @@ jobs:
             - Python 3.9, 3.10, 3.11, 3.12, 3.13 support
 
             Built automatically from PyMOL upstream release using official build instructions.`,
-                draft: false,
+                draft: true,
                 prerelease: false
               });
 
