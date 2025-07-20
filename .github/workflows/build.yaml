@@ -1,27 +1,8 @@
-name: Build & Publish PyMOL Wheels
+name: CI
 
-on:
-  workflow_dispatch:
-    inputs:
-      pymol_version:
-        description: "PyMOL version" # git tag
-        required: false
-        default: "latest" #
-        type: string
-      publish_to_pypi:
-        description: "Publish to PyPI"
-        required: false
-        default: false
-        type: boolean
-      run_tests:
-        description: "Run tests after building"
-        required: false
-        default: true
-        type: boolean
-  push:
+on: [push, pull_request]
 
 env:
-  PYMOL_VERSION: ${{ inputs.pymol_version || 'latest' }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
