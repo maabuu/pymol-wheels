@@ -18,7 +18,7 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  PYMOL_VERSION: ${{ inputs.pymol_version || 'latest' }}
+  PYMOL_VERSION: ${{ inputs.pymol_version || 'dev' }}
 
 jobs:
   detect-version:
