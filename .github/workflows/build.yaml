@@ -21,6 +21,9 @@ env:
   PYMOL_VERSION: ${{ inputs.pymol_version || 'dev' }}
 
 jobs:
+  # --------------------------
+  # Set version
+  # --------------------------
   detect-version:
     name: Detect PyMOL Version
     runs-on: ubuntu-latest
@@ -53,6 +56,10 @@ jobs:
             echo "❌ Invalid PYMOL_VERSION: '${{ env.PYMOL_VERSION }}'. Must be 'latest', 'dev', or a valid version number (e.g., '2.5', '2.5.1')."
             exit 1
           fi
+
+  # --------------------------
+  # Build Linux wheels
+  # --------------------------
   build-Linux:
     runs-on: ubuntu-22.04
     needs: detect-version
@@ -116,6 +123,9 @@ jobs:
           name: pymol-wheel-linux-py${{ matrix.python-version }}
           path: dist/*.whl
 
+  # --------------------------
+  # Build Windows wheels
+  # --------------------------
   # build-Windows:
   #   runs-on: windows-latest
   #   needs: detect-version
@@ -191,6 +201,9 @@ jobs:
   #         name: pymol-wheel-windows-py${{ matrix.python-version }}
   #         path: dist/*.whl
 
+  # --------------------------
+  # Build macOS wheels
+  # --------------------------
   # build-MacOS:
   #   runs-on: macos-latest
   #   needs: detect-version
@@ -443,6 +456,9 @@ jobs:
               }
             }
 
+  # --------------------------
+  # Publish to PyPI
+  # --------------------------
   publish:
     name: Publish Wheels to PyPI
     needs:
@@ -450,6 +466,8 @@ jobs:
       - build-linux
       # - build-windows
       # - build-macos
+    permissions:
+      id-token: write
     runs-on: ubuntu-latest
     if: inputs.publish_to_pypi
 
