@@ -12,6 +12,11 @@ on:
         required: false
         default: false
         type: boolean
+      publish_to_testpypi:
+        description: "Publish wheels to TestPyPI"
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   publish:
@@ -62,6 +67,7 @@ jobs:
       actions: read
       contents: read
     runs-on: ubuntu-latest
+    if: inputs.publish_to_testpypi
     environment:
       name: testpypi
       url: https://test.pypi.org/p/pymol-open-source
