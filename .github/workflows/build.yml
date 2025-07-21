@@ -213,8 +213,8 @@ jobs:
 
     strategy:
       matrix:
-        # python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        python-version: ["3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        # python-version: ["3.12"]
 
     env:
       CONDA_ROOT: "/tmp/miniforge"
@@ -389,37 +389,3 @@ jobs:
                 throw error;
               }
             }
-
-  # --------------------------
-  # Publish to PyPI
-  # --------------------------
-  publish:
-    name: Publish Wheels to PyPI
-    needs:
-      - detect-version
-      - build-linux
-      # - build-windows
-      - build-macos
-    permissions:
-      id-token: write
-    runs-on: ubuntu-latest
-    if: inputs.publish_to_pypi
-
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-
-      - name: Combine all wheels
-        run: |
-          mkdir final_dist
-          find dist -name "*.whl" -exec cp {} final_dist/ \;
-          echo "Wheels to publish:"
-          ls -la final_dist/
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          packages-dir: final_dist
