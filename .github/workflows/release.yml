@@ -109,7 +109,7 @@ jobs:
               console.log('✅ GitHub release created:', release.data.html_url);
 
               // Upload wheel files as release assets
-              const assetsDir = './release-assets';
+              const assetsDir = './final-dist';
               const files = fs.readdirSync(assetsDir);
               for (const file of files) {
                 if (file.endsWith('.whl')) {
