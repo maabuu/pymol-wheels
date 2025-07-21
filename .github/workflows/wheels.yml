@@ -70,7 +70,8 @@ jobs:
         # python-version: ["3.12"]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Get source
+        uses: actions/checkout@v4
         with:
           repository: schrodinger/pymol-open-source
           ref: ${{ needs.detect-version.outputs.pymol_version }}
@@ -92,14 +93,14 @@ jobs:
               libnetcdf-dev \
               libpng-dev \
               libxml2-dev
-      - name: Install collada2gltf
-        run: |
           wget -nv https://anaconda.org/schrodinger/collada2gltf/2.1.4/download/linux-64/collada2gltf-2.1.4-h6bb024c_0.tar.bz2
           sudo tar xf collada2gltf-*.tar.bz2 -C / bin/collada2gltf
+
       - name: Get additional sources
         run: |
           git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
           cp -R mmtf-cpp/include/* include/
+
       - name: Build
         run: |
           pip install --upgrade pip
@@ -110,6 +111,7 @@ jobs:
       - name: Test
         run: |
           pymol -ckqy testing/testing.py --run all
+
       - name: Build wheel
         run: |
           pip install --upgrade pip build wheel
@@ -138,7 +140,8 @@ jobs:
   #     CONDA_ENV_NAME: "testing_env"
 
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - name: Get source
+  #       uses: actions/checkout@v4
   #       with:
   #         repository: schrodinger/pymol-open-source
   #         ref: ${{ needs.detect-version.outputs.pymol_version }}
@@ -218,7 +221,8 @@ jobs:
       CONDA_ENV_NAME: "testing_env"
 
     steps:
-      - uses: actions/checkout@v4.0.0
+      - name: Get source
+        uses: actions/checkout@v4.0.0
         with:
           repository: schrodinger/pymol-open-source
           ref: ${{ needs.detect-version.outputs.pymol_version }}
@@ -227,9 +231,11 @@ jobs:
         run: |
           curl -L -o $CONDA_ROOT.sh https://github.com/conda-forge/miniforge/releases/download/24.11.0-0/Miniforge3-MacOSX-x86_64.sh
           bash $CONDA_ROOT.sh -b -p $CONDA_ROOT
+
       - name: Add conda to PATH
         run: |
           echo "${CONDA_ROOT}/bin" >> "$GITHUB_PATH"
+
       - name: Set up Miniforge
         run: |
           conda create --name $CONDA_ENV_NAME -c conda-forge -c schrodinger \
@@ -243,6 +249,7 @@ jobs:
               libpng \
               libxml2 \
               libnetcdf
+
       - name: Get additional sources
         run: |
           source activate $CONDA_ENV_NAME
@@ -250,15 +257,18 @@ jobs:
           cp -R mmtf-cpp/include/* ${CONDA_PREFIX}/include/
           git clone --depth 1 --single-branch --branch cpp_master https://github.com/msgpack/msgpack-c.git
           cp -R msgpack-c/include/* ${CONDA_PREFIX}/include/
+
       - name: Build PyMOL
         run: |
           source activate $CONDA_ENV_NAME
           export MACOSX_DEPLOYMENT_TARGET=12.0
           pip install -v --config-settings testing=True '.[dev]'
+
       - name: Test
         run: |
           source activate $CONDA_ENV_NAME
           pymol -ckqy testing/testing.py --run all
+
       - name: Build wheel
         run: |
           source activate $CONDA_ENV_NAME
