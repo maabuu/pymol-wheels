@@ -98,8 +98,6 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -v --config-settings testing=True '.[dev]'
-        env:
-          DEBUG: 1
 
       - name: Test
         run: |
@@ -109,8 +107,6 @@ jobs:
         run: |
           pip install --upgrade pip build wheel
           python -m build --wheel
-        env:
-          DEBUG: 1
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
@@ -187,10 +183,8 @@ jobs:
       - name: Build wheel
         run: |
           conda activate $env:CONDA_ENV_NAME
-          pip install --upgrade pip build wheel
+          pip install --upgrade pip build wheel setuptools
           python setup.py bdist_wheel --testing=false
-        env:
-          DEBUG: 1
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
@@ -267,7 +261,7 @@ jobs:
         run: |
           source activate $CONDA_ENV_NAME
           export MACOSX_DEPLOYMENT_TARGET=12.0
-          pip install --upgrade pip build wheel
+          pip install --upgrade pip build wheel setuptools
           python setup.py bdist_wheel --testing=false
 
       - name: Upload wheel
