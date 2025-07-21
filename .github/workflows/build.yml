@@ -1,4 +1,4 @@
-name: Wheels CI
+name: build
 
 on:
   # push:
