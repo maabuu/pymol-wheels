@@ -8,11 +8,6 @@ on:
         required: false
         default: "dev"
         type: string
-      publish_to_pypi:
-        description: "Publish wheels to PyPI"
-        required: false
-        default: false
-        type: boolean
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -193,7 +188,7 @@ jobs:
         run: |
           conda activate $env:CONDA_ENV_NAME
           pip install --upgrade pip build wheel
-          python -m build --wheel
+          python setup.py bdist_wheel --testing=false
         env:
           DEBUG: 1
 

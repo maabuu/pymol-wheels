@@ -10,11 +10,6 @@ on:
         required: false
         default: "dev"
         type: string
-      publish_to_pypi:
-        description: "Publish wheels to PyPI"
-        required: false
-        default: false
-        type: boolean
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
