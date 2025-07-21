@@ -95,4 +95,4 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: final_dist
-          # Remove password line if using trusted publishing
+          verbose: true
