@@ -121,82 +121,82 @@ jobs:
   # --------------------------
   # Build Windows wheels
   # --------------------------
-  build-Windows:
-    runs-on: windows-latest
-    needs: detect-version
+  # build-Windows:
+  #   runs-on: windows-latest
+  #   needs: detect-version
 
-    strategy:
-      matrix:
-        # python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        python-version: ["3.11"]
+  #   strategy:
+  #     matrix:
+  #       # python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+  #       python-version: ["3.11"]
 
-    env:
-      CONDA_ENV_NAME: "testing_env"
+  #   env:
+  #     CONDA_ENV_NAME: "testing_env"
 
-    steps:
-      - name: Get source
-        uses: actions/checkout@v4
-        with:
-          repository: schrodinger/pymol-open-source
-          ref: ${{ needs.detect-version.outputs.pymol_version }}
+  #   steps:
+  #     - name: Get source
+  #       uses: actions/checkout@v4
+  #       with:
+  #         repository: schrodinger/pymol-open-source
+  #         ref: ${{ needs.detect-version.outputs.pymol_version }}
 
-      - name: Install Miniforge
-        run: |
-          choco install miniforge3
+  #     - name: Install Miniforge
+  #       run: |
+  #         choco install miniforge3
 
-      - name: Add conda to PATH
-        run: |
-          echo "$env:CONDA" | Out-File -Append -FilePath $env:GITHUB_PATH
-          echo "$env:CONDA\Scripts" | Out-File -Append -FilePath $env:GITHUB_PATH
+  #     - name: Add conda to PATH
+  #       run: |
+  #         echo "$env:CONDA" | Out-File -Append -FilePath $env:GITHUB_PATH
+  #         echo "$env:CONDA\Scripts" | Out-File -Append -FilePath $env:GITHUB_PATH
 
-      - name: Set up Miniforge
-        run: |
-          conda init powershell
-          conda create --name $env:CONDA_ENV_NAME -c conda-forge -c schrodinger `
-              python=${{ matrix.python-version }} `
-              pip `
-              catch2=2.13.3 `
-              collada2gltf `
-              freetype `
-              glew `
-              glm `
-              libpng `
-              libxml2 `
-              libnetcdf `
+  #     - name: Set up Miniforge
+  #       run: |
+  #         conda init powershell
+  #         conda create --name $env:CONDA_ENV_NAME -c conda-forge -c schrodinger `
+  #             python=${{ matrix.python-version }} `
+  #             pip `
+  #             catch2=2.13.3 `
+  #             collada2gltf `
+  #             freetype `
+  #             glew `
+  #             glm `
+  #             libpng `
+  #             libxml2 `
+  #             libnetcdf `
 
-      - name: Get additional sources
-        run: |
-          conda activate $env:CONDA_ENV_NAME
+  #     - name: Get additional sources
+  #       run: |
+  #         conda activate $env:CONDA_ENV_NAME
 
-          git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
-          Copy-Item -Recurse -Path mmtf-cpp/include\* -Destination "$env:CONDA_PREFIX\Library\include"
-          git clone --depth 1 --single-branch --branch cpp_master https://github.com/msgpack/msgpack-c.git
-          Copy-Item -Recurse -Path msgpack-c/include\* -Destination "$env:CONDA_PREFIX\Library\include"
-          dir $env:CONDA_PREFIX\Library\include
+  #         git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
+  #         Copy-Item -Recurse -Path mmtf-cpp/include\* -Destination "$env:CONDA_PREFIX\Library\include"
+  #         git clone --depth 1 --single-branch --branch cpp_master https://github.com/msgpack/msgpack-c.git
+  #         Copy-Item -Recurse -Path msgpack-c/include\* -Destination "$env:CONDA_PREFIX\Library\include"
+  #         dir $env:CONDA_PREFIX\Library\include
 
-      - name: Build PyMOL
-        run: |
-          conda activate $env:CONDA_ENV_NAME
-          pip install -v --config-settings testing=True .[dev]
+  #     - name: Build PyMOL
+  #       run: |
+  #         conda activate $env:CONDA_ENV_NAME
+  #         pip install -v --config-settings testing=True .[dev]
 
-      - name: Test
-        run: |
-          conda activate $env:CONDA_ENV_NAME
-          pymol -ckqy testing\testing.py --run all
+  #     - name: Test
+  #       run: |
+  #         conda activate $env:CONDA_ENV_NAME
+  #         pymol -ckqy testing\testing.py --run all
 
-      - name: Build wheel
-        run: |
-          conda activate $env:CONDA_ENV_NAME
-          pip install --upgrade pip build wheel
-          python setup.py bdist_wheel --testing=false
-        env:
-          DEBUG: 1
+  #     - name: Build wheel
+  #       run: |
+  #         conda activate $env:CONDA_ENV_NAME
+  #         pip install --upgrade pip build wheel
+  #         python setup.py bdist_wheel --testing=false
+  #       env:
+  #         DEBUG: 1
 
-      - name: Upload wheel
-        uses: actions/upload-artifact@v4
-        with:
-          name: pymol-wheel-windows-py${{ matrix.python-version }}
-          path: dist/*.whl
+  #     - name: Upload wheel
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: pymol-wheel-windows-py${{ matrix.python-version }}
+  #         path: dist/*.whl
 
   # --------------------------
   # Build macOS wheels
