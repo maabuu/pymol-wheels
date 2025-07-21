@@ -29,7 +29,7 @@ jobs:
 
       - name: Find latest successful build run
         id: find-build
-        uses: ./.github/actions/find-build-run.yml
+        uses: ./.github/actions/find-build-run
         with:
           build_run_id: ${{ inputs.build_run_id }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -74,7 +74,7 @@ jobs:
 
       - name: Find latest successful build run
         id: find-build
-        uses: ./.github/actions/find-build-run.yml
+        uses: ./.github/actions/find-build-run
         with:
           build_run_id: ${{ inputs.build_run_id }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
