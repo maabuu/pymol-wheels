@@ -96,6 +96,9 @@ jobs:
         run: |
           mkdir final_dist
           find dist -name "*.whl" -exec cp {} final_dist/ \;
+          for file in final_dist/*.whl; do
+            mv "$file" "${file/pymol/pymol_open_source}"
+          done
           echo "Wheels to publish:"
           ls -la final_dist/
 
