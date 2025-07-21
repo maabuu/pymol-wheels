@@ -59,8 +59,8 @@ jobs:
 
     strategy:
       matrix:
-        # python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        python-version: ["3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        # python-version: ["3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -403,11 +403,11 @@ jobs:
 
             - Linux wheels (x86_64)
             - Windows wheels (x86_64)
-            - macOS wheels (x86_64)
+            - macOS wheels (x86_64, arm64)
             - Python 3.9, 3.10, 3.11, 3.12, 3.13 support
 
             Built automatically from PyMOL upstream release using official build instructions.`,
-                draft: true,
+                draft: false,
                 prerelease: false
               });
 
@@ -451,7 +451,7 @@ jobs:
       # - build-windows
       # - build-macos
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_to_pypi
+    if: inputs.publish_to_pypi
 
     steps:
       - name: Download all artifacts
