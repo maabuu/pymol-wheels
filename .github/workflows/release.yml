@@ -10,6 +10,10 @@ on:
         required: false
         default: "dev"
         type: string
+      build_run_id:
+        description: "Build workflow run ID (optional - will use latest successful if not provided)"
+        required: false
+        type: string
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -18,20 +22,27 @@ env:
 jobs:
   github-release:
     name: Create GitHub Release
-    needs:
-      - detect-version
-      - build-linux
-      # - build-windows
-      - build-macos
     runs-on: ubuntu-latest
-    # if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
+      actions: read
 
     steps:
-      - name: Download all artifacts
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find latest successful build run
+        id: find-build
+        uses: ./.github/actions/find-build-run
+        with:
+          build_run_id: ${{ inputs.build_run_id }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all artifacts from build workflow
         uses: actions/download-artifact@v4
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.find-build.outputs.run-id }}
           path: artifacts
 
       - name: Prepare release assets
