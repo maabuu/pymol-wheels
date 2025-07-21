@@ -106,21 +106,20 @@ jobs:
 
               console.log('✅ GitHub release created:', release.data.html_url);
 
+              // Files
+              const assetsDir = './release-assets';
+              const files = fs.readdirSync(assetsDir);
+
               // Remove source code from release assets
-              const artifactsDir = './release-assets';
-              const files = fs.readdirSync(artifactsDir);
               for (const file of files) {
                 if (file.endsWith('.tar.gz') || file.endsWith('.zip')) {
-                  fs.unlinkSync(path.join(artifactsDir, file));
+                  fs.unlinkSync(path.join(assetsDir, file));
 
                   console.log(`🗑️ Removed source code artifact: ${file}`);
                 }
               }
 
               // Upload wheel files as release assets
-              const assetsDir = './release-assets';
-              const files = fs.readdirSync(assetsDir);
-
               for (const file of files) {
                 if (file.endsWith('.whl')) {
                   const filePath = path.join(assetsDir, file);
