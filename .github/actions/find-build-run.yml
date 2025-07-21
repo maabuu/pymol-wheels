@@ -1,0 +1,54 @@
+name: 'Find Latest Successful Build Run'
+description: 'Finds the latest successful build workflow run or uses a provided run ID'
+
+inputs:
+  build_run_id:
+    description: 'Specific build run ID to use (optional)'
+    required: false
+    default: ''
+  github_token:
+    description: 'GitHub token for API access'
+    required: true
+    default: ${{ github.token }}
+
+outputs:
+  run-id:
+    description: 'The build workflow run ID to use'
+    value: ${{ steps.find-build.outputs.run-id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Find latest successful build run
+      id: find-build
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github_token }}
+        script: |
+          const buildRunId = '${{ inputs.build_run_id }}';
+
+          if (buildRunId) {
+            console.log(`Using provided build run ID: ${buildRunId}`);
+            core.setOutput('run-id', buildRunId);
+            return;
+          }
+
+          console.log('Finding latest successful build workflow run...');
+
+          const { data: runs } = await github.rest.actions.listWorkflowRuns({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: 'build.yml',
+            status: 'completed',
+            conclusion: 'success',
+            per_page: 1
+          });
+
+          if (runs.workflow_runs.length === 0) {
+            core.setFailed('No successful build workflow runs found');
+            return;
+          }
+
+          const latestRun = runs.workflow_runs[0];
+          console.log(`Found latest successful build run: ${latestRun.id} from ${latestRun.created_at}`);
+          core.setOutput('run-id', latestRun.id);
