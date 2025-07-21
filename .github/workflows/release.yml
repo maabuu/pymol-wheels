@@ -105,24 +105,6 @@ jobs:
 
               console.log('✅ GitHub release created:', release.data.html_url);
 
-              // Delete source zip and tar.gz in the release assets
-              const existingAssets = await github.rest.repos.listReleaseAssets({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: release.data.id
-              });
-
-              for (const asset of existingAssets.data) {
-                if (asset.name.endsWith('.zip') || asset.name.endsWith('.tar.gz')) {
-                  await github.rest.repos.deleteReleaseAsset({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    asset_id: asset.id
-                  });
-                  console.log(`🗑️ Deleted asset: ${asset.name}`);
-                }
-              }
-
               // Upload wheel files as release assets
               const assetsDir = './release-assets';
               const files = fs.readdirSync(assetsDir);
