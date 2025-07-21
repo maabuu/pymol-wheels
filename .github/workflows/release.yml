@@ -108,7 +108,12 @@ jobs:
 
               // Delete source zip and tar.gz in the release assets
               const existingAssets = await github.rest.repos.listReleaseAssets({
-              for const asset of existingAssets.data) {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id
+              });
+
+              for (const asset of existingAssets.data) {
                 if (asset.name.endsWith('.zip') || asset.name.endsWith('.tar.gz')) {
                   await github.rest.repos.deleteReleaseAsset({
                     owner: context.repo.owner,
