@@ -111,7 +111,7 @@ jobs:
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: pymol-wheel-linux-py${{ matrix.python-version }}
+          name: pymol-linux-py${{ matrix.python-version }}
           path: dist/*.whl
 
   # --------------------------
@@ -189,7 +189,7 @@ jobs:
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: pymol-wheel-windows-py${{ matrix.python-version }}
+          name: pymol-windows-py${{ matrix.python-version }}
           path: dist/*.whl
 
   # --------------------------
@@ -267,5 +267,5 @@ jobs:
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: pymol-wheel-macos-${{ matrix.os == 'macos-13' && 'x86_64' || 'arm64' }}-py${{ matrix.python-version }}
+          name: pymol-macos-${{ matrix.os == 'macos-13' && 'x86_64' || 'arm64' }}-py${{ matrix.python-version }}
           path: dist/*.whl
