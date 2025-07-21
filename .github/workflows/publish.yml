@@ -29,7 +29,7 @@ jobs:
 
       - name: Find latest successful build run
         id: find-build
-        uses: ./.github/actions/find-build-run
+        uses: ./.github/actions/find-build-run.yml
         with:
           build_run_id: ${{ inputs.build_run_id }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +66,7 @@ jobs:
 
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/<package-name>
+      url: https://test.pypi.org/p/pymol-open-source
 
     steps:
       - name: Checkout repository
@@ -74,7 +74,7 @@ jobs:
 
       - name: Find latest successful build run
         id: find-build
-        uses: ./.github/actions/find-build-run
+        uses: ./.github/actions/find-build-run.yml
         with:
           build_run_id: ${{ inputs.build_run_id }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
