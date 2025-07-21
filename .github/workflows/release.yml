@@ -74,7 +74,7 @@ jobs:
                 repo: context.repo.repo,
                 tag_name: releaseDate,
                 name: releaseName,
-                make_latest: true,
+                make_latest: "true",
                 body: `PyMOL ${pymolVersion} wheels built and ready for download.
 
             **PyMOL Version:** ${pymolVersion}
