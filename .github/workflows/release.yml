@@ -58,32 +58,33 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
+            let releaseDate = new Date().toISOString().split('T')[0];
             let pymolVersion = '${{ needs.detect-version.outputs.pymol_version }}';
             if (pymolVersion === '' || pymolVersion === 'dev') {
               pymolVersion = 'latest';
             } else if (!pymolVersion || !/^[A-Za-z0-9._\-]+$/.test(pymolVersion)) {
               throw new Error(`Invalid pymolVersion: "${pymolVersion}". Aborting release.`);
             }
-            const tagName = `pymol-open-source-${pymolVersion}`;
-            const releaseName = `PyMOL ${pymolVersion} Wheels`;
+             const releaseName = `${releaseDate} latest wheels`;
 
             try {
               // Create the release
               const release = await github.rest.repos.createRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                tag_name: tagName,
+                tag_name: releaseDate,
                 name: releaseName,
-                body: `PyMOL ${pymolVersion} wheels built and ready for download!
+                make_latest: true,
+                body: `PyMOL ${pymolVersion} wheels built and ready for download.
 
             **PyMOL Version:** ${pymolVersion}
-            **Source:** https://github.com/schrodinger/pymol-open-source/releases/tag/${pymolVersion}
+            **Source:** https://github.com/schrodinger/pymol-open-source/
 
             ## Installation
 
             Download the wheel file for your platform and install with:
             \`\`\`bash
-            pip install pymol_open_source-${pymolVersion}-*.whl
+            pip install pymol-*.whl
             \`\`\`
 
             Or install from PyPI:
@@ -104,6 +105,17 @@ jobs:
               });
 
               console.log('✅ GitHub release created:', release.data.html_url);
+
+              // Remove source code from release assets
+              const artifactsDir = './release-assets';
+              const files = fs.readdirSync(artifactsDir);
+              for (const file of files) {
+                if (file.endsWith('.tar.gz') || file.endsWith('.zip')) {
+                  fs.unlinkSync(path.join(artifactsDir, file));
+
+                  console.log(`🗑️ Removed source code artifact: ${file}`);
+                }
+              }
 
               // Upload wheel files as release assets
               const assetsDir = './release-assets';
