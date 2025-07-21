@@ -17,11 +17,11 @@ on:
 jobs:
   publish:
     name: Publish Wheels to PyPI
-    needs:
-      # - detect-version
-      # - build-linux
-      # - build-windows
-      # - build-macos
+    # needs:
+    #   - detect-version
+    #   - build-linux
+    #   - build-windows
+    #   - build-macos
     permissions:
       id-token: write
     runs-on: ubuntu-latest
