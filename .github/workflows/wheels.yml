@@ -275,89 +275,12 @@ jobs:
           export MACOSX_DEPLOYMENT_TARGET=12.0
           pip install --upgrade pip build wheel
           python setup.py bdist_wheel --testing=false
+
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
           name: pymol-wheel-macos-${{ matrix.os == 'macos-13' && 'x86_64' || 'arm64' }}-py${{ matrix.python-version }}
           path: dist/*.whl
-
-      - name: Create GitHub release with wheels
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const pymolVersion = '${{ needs.detect-version.outputs.pymol_version }}';
-            const tagName = `pymol-open-source-${pymolVersion}`;
-            const releaseName = `PyMOL ${pymolVersion} Wheels`;
-
-            try {
-              // Create the release
-              const release = await github.rest.repos.createRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag_name: tagName,
-                name: releaseName,
-                body: `PyMOL ${pymolVersion} wheels built and ready for download!
-
-            **PyMOL Version:** ${pymolVersion}
-            **Source:** https://github.com/schrodinger/pymol-open-source/releases/tag/${pymolVersion}
-
-            ## Installation
-
-            Download the wheel file for your platform and install with:
-            \`\`\`bash
-            pip install pymol_open_source-${pymolVersion}-*.whl
-            \`\`\`
-
-            Or install from PyPI:
-            \`\`\`bash
-            pip install pymol-open-source
-            \`\`\`
-
-            ## What's included
-
-            - Linux wheels (x86_64)
-            - Windows wheels (x86_64)
-            - macOS wheels (x86_64)
-            - Python 3.9, 3.10, 3.11, 3.12, 3.13 support
-
-            Built automatically from PyMOL upstream release using official build instructions.`,
-                draft: false,
-                prerelease: false
-              });
-
-              console.log('✅ GitHub release created:', release.data.html_url);
-
-              // Upload wheel files as release assets
-              const assetsDir = './release-assets';
-              const files = fs.readdirSync(assetsDir);
-
-              for (const file of files) {
-                if (file.endsWith('.whl')) {
-                  const filePath = path.join(assetsDir, file);
-                  const fileContent = fs.readFileSync(filePath);
-
-                  await github.rest.repos.uploadReleaseAsset({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    release_id: release.data.id,
-                    name: file,
-                    data: fileContent,
-                  });
-
-                  console.log(`✅ Uploaded ${file} to release`);
-                }
-              }
-
-            } catch (error) {
-              if (error.message.includes('already_exists')) {
-                console.log('⚠️ Release already exists, skipping creation');
-              } else {
-                console.error('❌ Failed to create GitHub release:', error.message);
-                throw error;
-              }
-            }
 
   github-release:
     name: Create GitHub Release
