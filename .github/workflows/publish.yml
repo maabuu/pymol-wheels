@@ -94,6 +94,8 @@ jobs:
 
       - name: Combine all wheels
         run: |
+          echo "Wheels in folder:"
+          ls -la final_dist/
           mkdir final_dist
           find dist -name "*.whl" -exec cp {} final_dist/ \;
           for file in final_dist/*.whl; do
