@@ -77,7 +77,6 @@ jobs:
                 make_latest: "true",
                 body: `PyMOL ${pymolVersion} wheels built and ready for download.
 
-            **PyMOL Version:** ${pymolVersion}
             **Source:** https://github.com/schrodinger/pymol-open-source/
 
             ## Installation
