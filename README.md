@@ -1,6 +1,6 @@
 # Open-source PyMOL wheels
 
-This project builds Python wheels for selected releases of the open-source version of PyMOL using GitHub Actions and makes them available on the [GitHub release page](https://github.com/maabuu/pymol-wheels/releases/) and on PyPI.
+This project builds Python wheels for selected releases of the open-source version of PyMOL using GitHub Actions and makes them available on the [GitHub release page](https://github.com/maabuu/pymol-wheels/releases/).
 
 Thanks to the original creator Warren L. DeLano for creating PyMOL and to Schrödiger for maintaining it.
 
