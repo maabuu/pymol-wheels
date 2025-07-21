@@ -5,6 +5,11 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      pymol_version:
+        description: "PyMOL version"
+        required: false
+        default: "dev"
+        type: string
       publish_to_pypi:
         description: "Publish wheels to PyPI"
         required: false
@@ -13,7 +18,7 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  PYMOL_VERSION: dev
+  PYMOL_VERSION: ${{ inputs.pymol_version || 'latest' }}
 
 jobs:
   detect-version:
@@ -27,7 +32,6 @@ jobs:
         id: version
         run: |
           if [ "${{ env.PYMOL_VERSION }}" = "latest" ]; then
-            # Fetch latest tag from PyMOL upstream
             VERSION=$(curl -s https://api.github.com/repos/schrodinger/pymol-open-source/tags | jq -r '.[0].name // empty')
             if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
               echo "❌ Failed to fetch latest PyMOL version"
@@ -35,9 +39,7 @@ jobs:
             fi
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           elif [ "${{ env.PYMOL_VERSION }}" = "dev" ]; then
-            # Use the current commit SHA as version for dev builds
-            VERSION=$(git rev-parse --short HEAD)
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
           elif [[ "${{ env.PYMOL_VERSION }}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
             VERSION="${{ env.PYMOL_VERSION }}"
             # add "v" prefix if not present
@@ -364,7 +366,9 @@ jobs:
             const fs = require('fs');
             const path = require('path');
             const pymolVersion = '${{ needs.detect-version.outputs.pymol_version }}';
-            if (!pymolVersion || !/^[A-Za-z0-9._\-]+$/.test(pymolVersion)) {
+            if (pymolVersion === '' || pymolVersion === 'dev') {
+              pymolVersion = 'latest';
+            } else if (!pymolVersion || !/^[A-Za-z0-9._\-]+$/.test(pymolVersion)) {
               throw new Error(`Invalid pymolVersion: "${pymolVersion}". Aborting release.`);
             }
             const tagName = `pymol-open-source-${pymolVersion}`;
