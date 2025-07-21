@@ -106,20 +106,22 @@ jobs:
 
               console.log('✅ GitHub release created:', release.data.html_url);
 
-              // Files
-              const assetsDir = './release-assets';
-              const files = fs.readdirSync(assetsDir);
-
-              // Remove source code from release assets
-              for (const file of files) {
-                if (file.endsWith('.tar.gz') || file.endsWith('.zip')) {
-                  fs.unlinkSync(path.join(assetsDir, file));
-
-                  console.log(`🗑️ Removed source code artifact: ${file}`);
+              // Delete source zip and tar.gz in the release assets
+              const existingAssets = await github.rest.repos.listReleaseAssets({
+              for const asset of existingAssets.data) {
+                if (asset.name.endsWith('.zip') || asset.name.endsWith('.tar.gz')) {
+                  await github.rest.repos.deleteReleaseAsset({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    asset_id: asset.id
+                  });
+                  console.log(`🗑️ Deleted asset: ${asset.name}`);
                 }
               }
 
               // Upload wheel files as release assets
+              const assetsDir = './release-assets';
+              const files = fs.readdirSync(assetsDir);
               for (const file of files) {
                 if (file.endsWith('.whl')) {
                   const filePath = path.join(assetsDir, file);
