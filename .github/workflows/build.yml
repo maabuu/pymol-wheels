@@ -1,8 +1,6 @@
 name: build
 
 on:
-  # push:
-  # pull_request:
   workflow_dispatch:
     inputs:
       pymol_version:
@@ -66,8 +64,8 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        # python-version: ["3.12"]
+        # python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11"]
 
     steps:
       - name: Get source
@@ -128,81 +126,82 @@ jobs:
   # --------------------------
   # Build Windows wheels
   # --------------------------
-  # build-Windows:
-  #   runs-on: windows-latest
-  #   needs: detect-version
+  build-Windows:
+    runs-on: windows-latest
+    needs: detect-version
 
-  #   strategy:
-  #     matrix:
-  #       python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    strategy:
+      matrix:
+        # python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11"]
 
-  #   env:
-  #     CONDA_ENV_NAME: "testing_env"
+    env:
+      CONDA_ENV_NAME: "testing_env"
 
-  #   steps:
-  #     - name: Get source
-  #       uses: actions/checkout@v4
-  #       with:
-  #         repository: schrodinger/pymol-open-source
-  #         ref: ${{ needs.detect-version.outputs.pymol_version }}
+    steps:
+      - name: Get source
+        uses: actions/checkout@v4
+        with:
+          repository: schrodinger/pymol-open-source
+          ref: ${{ needs.detect-version.outputs.pymol_version }}
 
-  #     - name: Install Miniforge
-  #       run: |
-  #         choco install miniforge3
+      - name: Install Miniforge
+        run: |
+          choco install miniforge3
 
-  #     - name: Add conda to PATH
-  #       run: |
-  #         echo "$env:CONDA" | Out-File -Append -FilePath $env:GITHUB_PATH
-  #         echo "$env:CONDA\Scripts" | Out-File -Append -FilePath $env:GITHUB_PATH
+      - name: Add conda to PATH
+        run: |
+          echo "$env:CONDA" | Out-File -Append -FilePath $env:GITHUB_PATH
+          echo "$env:CONDA\Scripts" | Out-File -Append -FilePath $env:GITHUB_PATH
 
-  #     - name: Set up Miniforge
-  #       run: |
-  #         conda init powershell
-  #         conda create --name $env:CONDA_ENV_NAME -c conda-forge -c schrodinger `
-  #             python=${{ matrix.python-version }} `
-  #             pip `
-  #             catch2=2.13.3 `
-  #             collada2gltf `
-  #             freetype `
-  #             glew `
-  #             glm `
-  #             libpng `
-  #             libxml2 `
-  #             libnetcdf `
+      - name: Set up Miniforge
+        run: |
+          conda init powershell
+          conda create --name $env:CONDA_ENV_NAME -c conda-forge -c schrodinger `
+              python=${{ matrix.python-version }} `
+              pip `
+              catch2=2.13.3 `
+              collada2gltf `
+              freetype `
+              glew `
+              glm `
+              libpng `
+              libxml2 `
+              libnetcdf `
 
-  #     - name: Get additional sources
-  #       run: |
-  #         conda activate $env:CONDA_ENV_NAME
+      - name: Get additional sources
+        run: |
+          conda activate $env:CONDA_ENV_NAME
 
-  #         git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
-  #         Copy-Item -Recurse -Path mmtf-cpp/include\* -Destination "$env:CONDA_PREFIX\Library\include"
-  #         git clone --depth 1 --single-branch --branch cpp_master https://github.com/msgpack/msgpack-c.git
-  #         Copy-Item -Recurse -Path msgpack-c/include\* -Destination "$env:CONDA_PREFIX\Library\include"
-  #         dir $env:CONDA_PREFIX\Library\include
+          git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
+          Copy-Item -Recurse -Path mmtf-cpp/include\* -Destination "$env:CONDA_PREFIX\Library\include"
+          git clone --depth 1 --single-branch --branch cpp_master https://github.com/msgpack/msgpack-c.git
+          Copy-Item -Recurse -Path msgpack-c/include\* -Destination "$env:CONDA_PREFIX\Library\include"
+          dir $env:CONDA_PREFIX\Library\include
 
-  #     - name: Build PyMOL
-  #       run: |
-  #         conda activate $env:CONDA_ENV_NAME
-  #         pip install -v --config-settings testing=True .[dev]
+      - name: Build PyMOL
+        run: |
+          conda activate $env:CONDA_ENV_NAME
+          pip install -v --config-settings testing=True .[dev]
 
-  #     - name: Test
-  #       run: |
-  #         conda activate $env:CONDA_ENV_NAME
-  #         pymol -ckqy testing\testing.py --run all
+      - name: Test
+        run: |
+          conda activate $env:CONDA_ENV_NAME
+          pymol -ckqy testing\testing.py --run all
 
-  #     - name: Build wheel
-  #       run: |
-  #         conda activate $env:CONDA_ENV_NAME
-  #         pip install --upgrade pip build wheel
-  #         python -m build --wheel
-  #       env:
-  #         DEBUG: 1
+      - name: Build wheel
+        run: |
+          conda activate $env:CONDA_ENV_NAME
+          pip install --upgrade pip build wheel
+          python -m build --wheel
+        env:
+          DEBUG: 1
 
-  #     - name: Upload wheel
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: pymol-wheel-windows-py${{ matrix.python-version }}
-  #         path: dist/*.whl
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: pymol-wheel-windows-py${{ matrix.python-version }}
+          path: dist/*.whl
 
   # --------------------------
   # Build macOS wheels
@@ -213,8 +212,8 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        # python-version: ["3.12"]
+        # python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11"]
 
     env:
       CONDA_ROOT: "/tmp/miniforge"
@@ -281,111 +280,3 @@ jobs:
         with:
           name: pymol-wheel-macos-${{ matrix.os == 'macos-13' && 'x86_64' || 'arm64' }}-py${{ matrix.python-version }}
           path: dist/*.whl
-
-  github-release:
-    name: Create GitHub Release
-    needs:
-      - detect-version
-      - build-linux
-      # - build-windows
-      - build-macos
-    runs-on: ubuntu-latest
-    # if: github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Prepare release assets
-        run: |
-          mkdir release-assets
-          find artifacts -name "*.whl" -exec cp {} release-assets/ \;
-          echo "Release assets:"
-          ls -la release-assets/
-
-      - name: Create GitHub release with wheels
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            let pymolVersion = '${{ needs.detect-version.outputs.pymol_version }}';
-            if (pymolVersion === '' || pymolVersion === 'dev') {
-              pymolVersion = 'latest';
-            } else if (!pymolVersion || !/^[A-Za-z0-9._\-]+$/.test(pymolVersion)) {
-              throw new Error(`Invalid pymolVersion: "${pymolVersion}". Aborting release.`);
-            }
-            const tagName = `pymol-open-source-${pymolVersion}`;
-            const releaseName = `PyMOL ${pymolVersion} Wheels`;
-
-            try {
-              // Create the release
-              const release = await github.rest.repos.createRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag_name: tagName,
-                name: releaseName,
-                body: `PyMOL ${pymolVersion} wheels built and ready for download!
-
-            **PyMOL Version:** ${pymolVersion}
-            **Source:** https://github.com/schrodinger/pymol-open-source/releases/tag/${pymolVersion}
-
-            ## Installation
-
-            Download the wheel file for your platform and install with:
-            \`\`\`bash
-            pip install pymol_open_source-${pymolVersion}-*.whl
-            \`\`\`
-
-            Or install from PyPI:
-            \`\`\`bash
-            pip install pymol-open-source
-            \`\`\`
-
-            ## What's included
-
-            - Linux wheels (x86_64)
-            - Windows wheels (x86_64)
-            - macOS wheels (x86_64, arm64)
-            - Python 3.9, 3.10, 3.11, 3.12, 3.13 support
-
-            Built automatically from PyMOL upstream release using official build instructions.`,
-                draft: false,
-                prerelease: false
-              });
-
-              console.log('✅ GitHub release created:', release.data.html_url);
-
-              // Upload wheel files as release assets
-              const assetsDir = './release-assets';
-              const files = fs.readdirSync(assetsDir);
-
-              for (const file of files) {
-                if (file.endsWith('.whl')) {
-                  const filePath = path.join(assetsDir, file);
-                  const fileContent = fs.readFileSync(filePath);
-
-                  await github.rest.repos.uploadReleaseAsset({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    release_id: release.data.id,
-                    name: file,
-                    data: fileContent,
-                  });
-
-                  console.log(`✅ Uploaded ${file} to release`);
-                }
-              }
-
-            } catch (error) {
-              if (error.message.includes('already_exists')) {
-                console.log('⚠️ Release already exists, skipping creation');
-              } else {
-                console.error('❌ Failed to create GitHub release:', error.message);
-                throw error;
-              }
-            }
