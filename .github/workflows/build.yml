@@ -196,7 +196,8 @@ jobs:
           conda activate $env:CONDA_ENV_NAME
           pip install --upgrade wheeledit
           Get-ChildItem dist
-          wheeledit dist/*.whl --rename=pymol-open-source
+          $wheel = Get-ChildItem dist/*.whl | Select-Object -First 1
+          wheeledit $wheel.FullName --rename=pymol-open-source
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
