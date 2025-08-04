@@ -193,7 +193,9 @@ jobs:
 
       - name: Rename wheel
         run: |
-          pip install wheeledit
+          conda activate $env:CONDA_ENV_NAME
+          pip install --upgrade wheeledit
+          Get-ChildItem dist
           wheeledit dist/*.whl --rename=pymol-open-source
 
       - name: Upload wheel
