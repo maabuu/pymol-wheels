@@ -54,11 +54,12 @@ jobs:
   # Build Linux wheels
   # --------------------------
   build-Linux:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
     needs: detect-version
 
     strategy:
       matrix:
+        os: [ubuntu-22.04]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
       fail-fast: false
 
@@ -117,7 +118,7 @@ jobs:
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: pymol-linux-${{ matrix.python-version }}
+          name: pymol-linux-${{ matrix.os }}-py${{ matrix.python-version }}
           # path: dist/pymol_open_source*.whl
           path: wheelhouse/pymol_open_source*.whl
 
@@ -125,11 +126,12 @@ jobs:
   # Build Windows wheels
   # --------------------------
   build-Windows:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
     needs: detect-version
 
     strategy:
       matrix:
+        os: [windows-2022]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
       fail-fast: false
 
@@ -204,18 +206,19 @@ jobs:
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: pymol-windows-${{ matrix.python-version }}
+          name: pymol-windows-${{ matrix.os }}-py${{ matrix.python-version }}
           path: dist/pymol_open_source*.whl
 
   # --------------------------
   # Build macOS wheels
   # --------------------------
   build-MacOS:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
     needs: detect-version
 
     strategy:
       matrix:
+        os: [macos-13, macos-14]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
       fail-fast: false
 
@@ -232,7 +235,8 @@ jobs:
 
       - name: Download Miniforge
         run: |
-          curl -L -o $CONDA_ROOT.sh https://github.com/conda-forge/miniforge/releases/download/24.11.0-0/Miniforge3-MacOSX-x86_64.sh
+          # Determine architecture based on runner
+          curl -L -o $CONDA_ROOT.sh https://github.com/conda-forge/miniforge/releases/download/24.11.0-0/Miniforge3-MacOSX-$(uname -m).sh
           bash $CONDA_ROOT.sh -b -p $CONDA_ROOT
 
       - name: Add conda to PATH
@@ -264,6 +268,7 @@ jobs:
       - name: Build PyMOL
         run: |
           source activate $CONDA_ENV_NAME
+          export ARCH=$(uname -m)
           export MACOSX_DEPLOYMENT_TARGET=12.0
           pip install -v --config-settings testing=True '.[dev]'
 
@@ -275,6 +280,7 @@ jobs:
       - name: Build wheel
         run: |
           source activate $CONDA_ENV_NAME
+          export ARCH=$(uname -m)
           export MACOSX_DEPLOYMENT_TARGET=12.0
           pip install --upgrade pip build wheel setuptools
           python setup.py bdist_wheel --testing=false
@@ -287,5 +293,5 @@ jobs:
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: pymol-macos-py${{ matrix.python-version }}
+          name: pymol-macos-${{ matrix.os }}-py${{ matrix.python-version }}
           path: dist/pymol_open_source*.whl
