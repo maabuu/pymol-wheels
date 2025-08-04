@@ -248,7 +248,7 @@ jobs:
           conda create --name $CONDA_ENV_NAME -c conda-forge -c schrodinger \
               python=${{ matrix.python-version }} \
               pip \
-              catch2=2.13.3 \
+              "catch2~=2.13" \
               collada2gltf \
               freetype \
               glew \
