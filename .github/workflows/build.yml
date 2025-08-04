@@ -108,11 +108,18 @@ jobs:
           pip install --upgrade pip build wheel
           python -m build --wheel
 
+      - name: Rename wheel
+        run: |
+          pip install wheeledit auditwheel patchelf
+          wheeledit dist/*.whl --rename=pymol-open-source
+          auditwheel repair dist/pymol_open_source-*.whl
+
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
           name: pymol-linux-${{ matrix.python-version }}
-          path: dist/*.whl
+          # path: dist/pymol_open_source*.whl
+          path: wheelhouse/pymol_open_source*.whl
 
   # --------------------------
   # Build Windows wheels
@@ -186,11 +193,19 @@ jobs:
           pip install --upgrade pip build wheel setuptools
           python setup.py bdist_wheel --testing=false
 
+      - name: Rename wheel
+        run: |
+          conda activate $env:CONDA_ENV_NAME
+          pip install --upgrade wheeledit
+          Get-ChildItem dist
+          $wheel = Get-ChildItem dist/*.whl | Select-Object -First 1
+          wheeledit $wheel.FullName --rename=pymol-open-source
+
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
           name: pymol-windows-${{ matrix.python-version }}
-          path: dist/*.whl
+          path: dist/pymol_open_source*.whl
 
   # --------------------------
   # Build macOS wheels
@@ -264,8 +279,13 @@ jobs:
           pip install --upgrade pip build wheel setuptools
           python setup.py bdist_wheel --testing=false
 
+      - name: Rename wheel
+        run: |
+          pip install wheeledit
+          wheeledit dist/*.whl --rename=pymol-open-source
+
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: pymol-macos-${{ matrix.os == 'macos-13' && 'x86_64' || 'arm64' }}-py${{ matrix.python-version }}
-          path: dist/*.whl
+          name: pymol-macos-py${{ matrix.python-version }}
+          path: dist/pymol_open_source*.whl

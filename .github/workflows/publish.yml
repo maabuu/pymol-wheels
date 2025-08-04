@@ -54,10 +54,7 @@ jobs:
           echo "Wheels in folder:"
           ls -la dist/
           mkdir final_dist
-          find dist -name "*.whl" -exec cp {} final_dist/ \;
-          for file in final_dist/*.whl; do
-            mv "$file" "${file/pymol/pymol_open_source}"
-          done
+          find dist -name "pymol_open_source*.whl" -exec cp {} final_dist/ \;
           echo "Wheels to publish:"
           ls -la final_dist/
 
@@ -102,10 +99,7 @@ jobs:
           echo "Wheels in folder:"
           ls -la dist/
           mkdir final_dist
-          find dist -name "*.whl" -exec cp {} final_dist/ \;
-          # for file in final_dist/*.whl; do
-          #   mv "$file" "${file/pymol/pymol_open_source}"
-          # done
+          find dist -name "pymol_open_source*.whl" -exec cp {} final_dist/ \;
           echo "Wheels to publish:"
           ls -la final_dist/
 

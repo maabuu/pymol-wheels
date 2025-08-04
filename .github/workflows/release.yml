@@ -68,7 +68,7 @@ jobs:
             } else if (!pymolVersion || !/^[A-Za-z0-9._\-]+$/.test(pymolVersion)) {
               throw new Error(`Invalid pymolVersion: "${pymolVersion}". Aborting release.`);
             }
-             const releaseName = `${releaseDate} latest wheels`;
+            const releaseName = `${releaseDate} ${pymolVersion}`;
 
             try {
               // Create the release
