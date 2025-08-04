@@ -112,13 +112,14 @@ jobs:
         run: |
           pip install wheeledit auditwheel patchelf
           wheeledit dist/*.whl --rename=pymol-open-source
-          auditwheel repair pymol_open_source-*.whl
+          auditwheel repair dist/pymol_open_source-*.whl
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
           name: pymol-linux-${{ matrix.python-version }}
-          path: dist/wheelhouse/pymol_open_source*.whl
+          # path: dist/pymol_open_source*.whl
+          path: wheelhouse/pymol_open_source*.whl
 
   # --------------------------
   # Build Windows wheels
