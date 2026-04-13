@@ -71,10 +71,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install metadata dependencies
-        run: |
-          pip install --upgrade build packaging
-
       - name: Determine PyMOL build metadata
         id: metadata
         run: |

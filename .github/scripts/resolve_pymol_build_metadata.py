@@ -3,10 +3,10 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
-from build.util import project_wheel_metadata
 from packaging.version import Version
 
 
@@ -16,6 +16,15 @@ def git(repo_dir: Path, *args: str) -> str:
         cwd=repo_dir,
         text=True,
     ).strip()
+
+
+def read_upstream_version(repo_dir: Path) -> str:
+    version_header = repo_dir / "layer0" / "Version.h"
+    content = version_header.read_text(encoding="utf-8")
+    match = re.search(r'_PyMOL_VERSION\s+"([^"]+)"', content)
+    if not match:
+        raise ValueError(f"Could not find _PyMOL_VERSION in {version_header}")
+    return match.group(1)
 
 
 def main() -> None:
@@ -28,7 +37,7 @@ def main() -> None:
     repo_dir = Path(args.repo_dir).resolve()
     json_out = Path(args.json_out).resolve()
 
-    upstream_version = project_wheel_metadata(repo_dir)["Version"]
+    upstream_version = read_upstream_version(repo_dir)
     parsed_version = Version(upstream_version)
 
     source_sha = git(repo_dir, "rev-parse", "HEAD")
