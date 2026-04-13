@@ -261,6 +261,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        arch: ["x86_64", "arm64"]
       fail-fast: false
 
     env:
@@ -276,7 +277,12 @@ jobs:
 
       - name: Download Miniforge
         run: |
-          curl -L -o $CONDA_ROOT.sh https://github.com/conda-forge/miniforge/releases/download/24.11.0-0/Miniforge3-MacOSX-x86_64.sh
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/download/24.11.0-0/Miniforge3-MacOSX-arm64.sh"
+          else
+            MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/download/24.11.0-0/Miniforge3-MacOSX-x86_64.sh"
+          fi
+          curl -L -o $CONDA_ROOT.sh $MINIFORGE_URL
           bash $CONDA_ROOT.sh -b -p $CONDA_ROOT
 
       - name: Add conda to PATH
@@ -335,5 +341,5 @@ jobs:
       - name: Upload wheel
         uses: actions/upload-artifact@v6
         with:
-          name: pymol-macos-py${{ matrix.python-version }}
+          name: pymol-macos-py${{ matrix.python-version }}-${{ matrix.arch }}
           path: dist/pymol_open_source*.whl
