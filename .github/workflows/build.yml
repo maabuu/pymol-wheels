@@ -109,6 +109,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Report version
+        run: |
+          echo "Building PyMOL wheel:"
+          echo "  Source ref: ${{ needs.detect-version.outputs.source_ref }}"
+          echo "  Source SHA: ${{ needs.detect-version.outputs.source_sha }}"
+          echo "  Upstream version: ${{ needs.detect-version.outputs.upstream_version }}"
+          echo "  Wheel version: ${{ needs.detect-version.outputs.wheel_version }}"
+          echo "  Release label: ${{ needs.detect-version.outputs.release_version_label }}"
+          echo "  Python version: ${{ matrix.python-version }}"
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -207,6 +217,16 @@ jobs:
               libxml2 `
               libnetcdf `
 
+      - name: Report version
+        run: |
+          echo "Building PyMOL wheel:"
+          echo "  Source ref: ${{ needs.detect-version.outputs.source_ref }}"
+          echo "  Source SHA: ${{ needs.detect-version.outputs.source_sha }}"
+          echo "  Upstream version: ${{ needs.detect-version.outputs.upstream_version }}"
+          echo "  Wheel version: ${{ needs.detect-version.outputs.wheel_version }}"
+          echo "  Release label: ${{ needs.detect-version.outputs.release_version_label }}"
+          echo "  Python version: ${{ matrix.python-version }}"
+
       - name: Get additional sources
         run: |
           conda activate $env:CONDA_ENV_NAME
@@ -304,6 +324,17 @@ jobs:
               libpng \
               libxml2 \
               libnetcdf
+
+      - name: Report version
+        run: |
+          echo "Building PyMOL wheel:"
+          echo "  Source ref: ${{ needs.detect-version.outputs.source_ref }}"
+          echo "  Source SHA: ${{ needs.detect-version.outputs.source_sha }}"
+          echo "  Upstream version: ${{ needs.detect-version.outputs.upstream_version }}"
+          echo "  Wheel version: ${{ needs.detect-version.outputs.wheel_version }}"
+          echo "  Release label: ${{ needs.detect-version.outputs.release_version_label }}"
+          echo "  Python version: ${{ matrix.python-version }}"
+          echo "  Architecture: ${{ matrix.arch }}"
 
       - name: Get additional sources
         run: |
