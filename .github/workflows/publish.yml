@@ -19,8 +19,58 @@ on:
         type: boolean
 
 jobs:
+  read-build-metadata:
+    name: Read Build Metadata
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      build_run_id: ${{ steps.find-build.outputs.run-id }}
+      wheel_version: ${{ steps.metadata.outputs.wheel_version }}
+      release_version_label: ${{ steps.metadata.outputs.release_version_label }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find latest successful build run
+        id: find-build
+        uses: ./.github/actions/find-build-run
+        with:
+          build_run_id: ${{ inputs.build_run_id }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download build metadata
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.find-build.outputs.run-id }}
+          name: pymol-build-metadata
+          path: metadata
+
+      - name: Parse build metadata
+        id: metadata
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata_file = Path("metadata/version.json")
+          metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              for key in ("wheel_version", "release_version_label"):
+                  value = metadata[key]
+                  if isinstance(value, bool):
+                      value = str(value).lower()
+                  fh.write(f"{key}={value}\n")
+          PY
+
   publish:
     name: Publish Wheels to PyPI
+    needs: read-build-metadata
     permissions:
       id-token: write
       actions: read
@@ -39,7 +89,7 @@ jobs:
         id: find-build
         uses: ./.github/actions/find-build-run
         with:
-          build_run_id: ${{ inputs.build_run_id }}
+          build_run_id: ${{ needs.read-build-metadata.outputs.build_run_id }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download artifacts from build workflow
@@ -66,6 +116,7 @@ jobs:
 
   publish-to-testpypi:
     name: Publish Wheels to TestPyPI
+    needs: read-build-metadata
     permissions:
       id-token: write
       actions: read
@@ -84,7 +135,7 @@ jobs:
         id: find-build
         uses: ./.github/actions/find-build-run
         with:
-          build_run_id: ${{ inputs.build_run_id }}
+          build_run_id: ${{ needs.read-build-metadata.outputs.build_run_id }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download artifacts from build workflow

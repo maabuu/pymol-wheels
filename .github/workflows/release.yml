@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       pymol_version:
-        description: "PyMOL version"
+        description: "PyMOL ref used for the build"
         required: false
         default: "dev"
         type: string
@@ -45,6 +45,36 @@ jobs:
           run-id: ${{ steps.find-build.outputs.run-id }}
           path: artifacts
 
+      - name: Read build metadata
+        id: metadata
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata_files = sorted(Path("artifacts").glob("**/version.json"))
+          if not metadata_files:
+              raise SystemExit("No build metadata artifact found")
+
+          metadata = json.loads(metadata_files[0].read_text(encoding="utf-8"))
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              for key in (
+                  "source_ref",
+                  "source_sha",
+                  "source_short_sha",
+                  "upstream_version",
+                  "wheel_version",
+                  "release_version_label",
+                  "is_exact_release",
+              ):
+                  value = metadata[key]
+                  if isinstance(value, bool):
+                      value = str(value).lower()
+                  fh.write(f"{key}={value}\n")
+          PY
+
       - name: Prepare release assets
         run: |
           mkdir release-assets
@@ -57,30 +87,41 @@ jobs:
 
       - name: Create GitHub release with wheels
         uses: actions/github-script@v7
+        env:
+          SOURCE_REF: ${{ steps.metadata.outputs.source_ref }}
+          SOURCE_SHA: ${{ steps.metadata.outputs.source_sha }}
+          UPSTREAM_VERSION: ${{ steps.metadata.outputs.upstream_version }}
+          WHEEL_VERSION: ${{ steps.metadata.outputs.wheel_version }}
+          RELEASE_VERSION_LABEL: ${{ steps.metadata.outputs.release_version_label }}
+          IS_EXACT_RELEASE: ${{ steps.metadata.outputs.is_exact_release }}
         with:
           script: |
             const fs = require('fs');
             const path = require('path');
-            let releaseDate = new Date().toISOString().split('T')[0];
-            let pymolVersion = '${{ needs.detect-version.outputs.pymol_version }}';
-            if (pymolVersion === '' || pymolVersion === 'dev') {
-              pymolVersion = 'latest';
-            } else if (!pymolVersion || !/^[A-Za-z0-9._\-]+$/.test(pymolVersion)) {
-              throw new Error(`Invalid pymolVersion: "${pymolVersion}". Aborting release.`);
-            }
-            const releaseName = `${releaseDate} ${pymolVersion}`;
+            const releaseVersionLabel = process.env.RELEASE_VERSION_LABEL;
+            const upstreamVersion = process.env.UPSTREAM_VERSION;
+            const wheelVersion = process.env.WHEEL_VERSION;
+            const sourceRef = process.env.SOURCE_REF;
+            const sourceSha = process.env.SOURCE_SHA;
+            const isExactRelease = process.env.IS_EXACT_RELEASE === 'true';
+            const releaseTag = `pymol-${releaseVersionLabel}`;
+            const releaseName = `PyMOL ${releaseVersionLabel}`;
 
             try {
               // Create the release
               const release = await github.rest.repos.createRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                tag_name: releaseDate,
+                tag_name: releaseTag,
                 name: releaseName,
-                make_latest: "true",
-                body: `PyMOL ${pymolVersion} wheels built and ready for download.
+                make_latest: isExactRelease ? "true" : "false",
+                body: `PyMOL wheels built and ready for download.
 
             **Source:** https://github.com/schrodinger/pymol-open-source/
+            **PyMOL ref:** \`${sourceRef}\`
+            **PyMOL commit:** \`${sourceSha}\`
+            **Upstream version:** \`${upstreamVersion}\`
+            **Wheel version:** \`${wheelVersion}\`
 
             ## Installation
 
@@ -101,9 +142,9 @@ jobs:
             - macOS wheels (x86_64, arm64)
             - Python 3.9, 3.10, 3.11, 3.12, 3.13 support
 
-            Built automatically from PyMOL upstream release using official build instructions.`,
+            Built automatically from PyMOL upstream source using official build instructions.`,
                 draft: false,
-                prerelease: false
+                prerelease: !isExactRelease
               });
 
               console.log('✅ GitHub release created:', release.data.html_url);
