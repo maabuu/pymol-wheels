@@ -145,6 +145,7 @@ jobs:
 
       - name: Rename wheel
         run: |
+          pip install "wheel<0.45"
           pip install wheeledit auditwheel patchelf change-wheel-version
           wheeledit dist/*.whl --rename=pymol-open-source
           if [ "${{ needs.detect-version.outputs.is_exact_release }}" != "true" ]; then
@@ -235,6 +236,7 @@ jobs:
       - name: Rename wheel
         run: |
           conda activate $env:CONDA_ENV_NAME
+          pip install "wheel<0.45"
           pip install --upgrade wheeledit change-wheel-version
           Get-ChildItem dist
           $wheel = Get-ChildItem dist/*.whl | Select-Object -First 1
@@ -331,6 +333,7 @@ jobs:
 
       - name: Rename wheel
         run: |
+          pip install "wheel<0.45"
           pip install wheeledit change-wheel-version
           wheeledit dist/*.whl --rename=pymol-open-source
           if [ "${{ needs.detect-version.outputs.is_exact_release }}" != "true" ]; then
