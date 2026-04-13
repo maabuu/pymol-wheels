@@ -7,8 +7,6 @@ import re
 import subprocess
 from pathlib import Path
 
-from packaging.version import Version
-
 
 def git(repo_dir: Path, *args: str) -> str:
     return subprocess.check_output(
@@ -27,6 +25,10 @@ def read_upstream_version(repo_dir: Path) -> str:
     return match.group(1)
 
 
+def is_prerelease_version(version: str) -> bool:
+    return bool(re.search(r"(a|b|rc|dev)\d*$", version, flags=re.IGNORECASE))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-dir", default=".", help="Path to the checked out PyMOL repository")
@@ -38,8 +40,6 @@ def main() -> None:
     json_out = Path(args.json_out).resolve()
 
     upstream_version = read_upstream_version(repo_dir)
-    parsed_version = Version(upstream_version)
-
     source_sha = git(repo_dir, "rev-parse", "HEAD")
     source_short_sha = source_sha[:7]
     tags_output = git(repo_dir, "tag", "--points-at", "HEAD")
@@ -47,8 +47,7 @@ def main() -> None:
     normalized_tags = {tag.removeprefix("v") for tag in tags}
 
     is_exact_release = (
-        not parsed_version.is_prerelease
-        and not parsed_version.is_devrelease
+        not is_prerelease_version(upstream_version)
         and upstream_version in normalized_tags
     )
 
