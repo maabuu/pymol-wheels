@@ -7,6 +7,11 @@ on:
         description: "Build workflow run ID (optional - will use latest successful if not provided)"
         required: false
         type: string
+      allow_partial:
+        description: "Allow a partial publish: accept a build run in which some jobs failed (the latest completed run if no ID is given) and publish the wheels it did build"
+        required: false
+        default: false
+        type: boolean
       publish_to_pypi:
         description: "Publish wheels to PyPI"
         required: false
@@ -37,6 +42,47 @@ jobs:
         uses: ./.github/actions/find-build-run
         with:
           build_run_id: ${{ inputs.build_run_id }}
+          allow_partial: ${{ inputs.allow_partial }}
+
+      # A build run in which a job failed still has the wheels of the jobs that
+      # passed. They are published only on request, so that a version does not
+      # end up on PyPI without some of its platforms by accident.
+      - name: Check build run
+        uses: actions/github-script@v9
+        env:
+          RUN_ID: ${{ steps.find-build.outputs.run-id }}
+          ALLOW_PARTIAL: ${{ inputs.allow_partial }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const run_id = Number(process.env.RUN_ID);
+            const allowPartial = process.env.ALLOW_PARTIAL === 'true';
+
+            const { data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id });
+            if (run.status !== 'completed') {
+              core.setFailed(`Build run ${run_id} has not finished yet (${run.status})`);
+              return;
+            }
+
+            // The artifacts that the publish jobs download.
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, { owner, repo, run_id, per_page: 100 });
+            const names = artifacts.filter((artifact) => !artifact.expired).map((artifact) => artifact.name);
+            const wheels = [...new Set(names)].filter((name) => name.startsWith('pymol-')).sort();
+            if (wheels.length === 0) {
+              core.setFailed(`Build run ${run_id} (${run.conclusion}) has no wheels to publish`);
+              return;
+            }
+            console.log(`Build run ${run_id} (${run.conclusion}) has ${wheels.length} wheel artifacts:\n${wheels.join('\n')}`);
+
+            if (run.conclusion === 'success') {
+              return;
+            }
+            if (!allowPartial) {
+              core.setFailed(`Build run ${run_id} did not succeed (${run.conclusion}). Enable allow_partial to publish the wheels it did build.`);
+              return;
+            }
+            core.warning(`Partial publish: build run ${run_id} did not succeed (${run.conclusion}). Publishing only ${wheels.join(', ')}`);
 
   publish:
     name: Publish Wheels to PyPI

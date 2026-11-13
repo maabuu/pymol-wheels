@@ -6,6 +6,10 @@ inputs:
     description: 'Specific build run ID to use (optional)'
     required: false
     default: ''
+  allow_partial:
+    description: 'Without a run ID, use the latest completed build run even if not all of its jobs succeeded'
+    required: false
+    default: 'false'
 
 outputs:
   run-id:
@@ -20,6 +24,7 @@ runs:
       uses: actions/github-script@v9
       env:
         BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        ALLOW_PARTIAL: ${{ inputs.allow_partial }}
       with:
         script: |
           const buildRunId = (process.env.BUILD_RUN_ID || '').trim();
@@ -30,21 +35,25 @@ runs:
             return;
           }
 
-          console.log('Finding latest successful build workflow run...');
+          // A completed run may have failed or been cancelled.
+          const status = process.env.ALLOW_PARTIAL === 'true' ? 'completed' : 'success';
+          const wanted = status === 'success' ? 'successful' : 'completed';
+
+          console.log(`Finding latest ${wanted} build workflow run...`);
 
           const { data: runs } = await github.rest.actions.listWorkflowRuns({
             owner: context.repo.owner,
             repo: context.repo.repo,
             workflow_id: 'build.yml',
-            status: 'success',
+            status,
             per_page: 1
           });
 
           if (runs.workflow_runs.length === 0) {
-            core.setFailed('No successful build workflow runs found');
+            core.setFailed(`No ${wanted} build workflow runs found`);
             return;
           }
 
           const latestRun = runs.workflow_runs[0];
-          console.log(`Found latest successful build run: ${latestRun.id} from ${latestRun.created_at}`);
+          console.log(`Found latest ${wanted} build run: ${latestRun.id} from ${latestRun.created_at}`);
           core.setOutput('run-id', latestRun.id);
