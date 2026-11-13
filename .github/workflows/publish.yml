@@ -19,58 +19,28 @@ on:
         type: boolean
 
 jobs:
-  read-build-metadata:
-    name: Read Build Metadata
+  find-build:
+    name: Find Build Run
     permissions:
       actions: read
       contents: read
     runs-on: ubuntu-latest
     outputs:
-      build_run_id: ${{ steps.find-build.outputs.run-id }}
-      wheel_version: ${{ steps.metadata.outputs.wheel_version }}
-      release_version_label: ${{ steps.metadata.outputs.release_version_label }}
+      run-id: ${{ steps.find-build.outputs.run-id }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
-      - name: Find latest successful build run
+      - name: Find build run
         id: find-build
         uses: ./.github/actions/find-build-run
         with:
           build_run_id: ${{ inputs.build_run_id }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download build metadata
-        uses: actions/download-artifact@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ steps.find-build.outputs.run-id }}
-          name: pymol-build-metadata
-          path: metadata
-
-      - name: Parse build metadata
-        id: metadata
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          metadata_file = Path("metadata/version.json")
-          metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              for key in ("wheel_version", "release_version_label"):
-                  value = metadata[key]
-                  if isinstance(value, bool):
-                      value = str(value).lower()
-                  fh.write(f"{key}={value}\n")
-          PY
 
   publish:
     name: Publish Wheels to PyPI
-    needs: read-build-metadata
+    needs: find-build
     permissions:
       id-token: write
       actions: read
@@ -82,41 +52,24 @@ jobs:
       url: https://pypi.org/p/pymol-open-source
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Find latest successful build run
-        id: find-build
-        uses: ./.github/actions/find-build-run
-        with:
-          build_run_id: ${{ needs.read-build-metadata.outputs.build_run_id }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download artifacts from build workflow
-        uses: actions/download-artifact@v7
+      - name: Download wheels from build workflow
+        uses: actions/download-artifact@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ steps.find-build.outputs.run-id }}
+          run-id: ${{ needs.find-build.outputs.run-id }}
+          pattern: pymol-*
+          merge-multiple: true
           path: dist
-
-      - name: Combine all wheels
-        run: |
-          echo "Wheels in folder:"
-          ls -la dist/
-          mkdir final_dist
-          find dist -name "pymol_open_source*.whl" -exec cp {} final_dist/ \;
-          echo "Wheels to publish:"
-          ls -la final_dist/
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: final_dist
+          packages-dir: dist
           verbose: true
 
   publish-to-testpypi:
     name: Publish Wheels to TestPyPI
-    needs: read-build-metadata
+    needs: find-build
     permissions:
       id-token: write
       actions: read
@@ -128,35 +81,18 @@ jobs:
       url: https://test.pypi.org/p/pymol-open-source
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Find latest successful build run
-        id: find-build
-        uses: ./.github/actions/find-build-run
-        with:
-          build_run_id: ${{ needs.read-build-metadata.outputs.build_run_id }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download artifacts from build workflow
-        uses: actions/download-artifact@v7
+      - name: Download wheels from build workflow
+        uses: actions/download-artifact@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ steps.find-build.outputs.run-id }}
+          run-id: ${{ needs.find-build.outputs.run-id }}
+          pattern: pymol-*
+          merge-multiple: true
           path: dist
-
-      - name: Combine all wheels
-        run: |
-          echo "Wheels in folder:"
-          ls -la dist/
-          mkdir final_dist
-          find dist -name "pymol_open_source*.whl" -exec cp {} final_dist/ \;
-          echo "Wheels to publish:"
-          ls -la final_dist/
 
       - name: Publish distribution to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-          packages-dir: final_dist
+          packages-dir: dist
           verbose: true

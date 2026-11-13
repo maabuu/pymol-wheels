@@ -1,23 +1,12 @@
 name: release
 
 on:
-  # push:
-  # pull_request:
   workflow_dispatch:
     inputs:
-      pymol_version:
-        description: "PyMOL ref used for the build"
-        required: false
-        default: "dev"
-        type: string
       build_run_id:
         description: "Build workflow run ID (optional - will use latest successful if not provided)"
         required: false
         type: string
-
-env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  PYMOL_VERSION: ${{ inputs.pymol_version || 'dev' }}
 
 jobs:
   github-release:
@@ -29,151 +18,85 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
-      - name: Find latest successful build run
+      - name: Find build run
         id: find-build
         uses: ./.github/actions/find-build-run
         with:
           build_run_id: ${{ inputs.build_run_id }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download all artifacts from build workflow
-        uses: actions/download-artifact@v7
+      - name: Download wheels from build workflow
+        uses: actions/download-artifact@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ steps.find-build.outputs.run-id }}
-          path: artifacts
+          pattern: pymol-*
+          merge-multiple: true
+          path: release-assets
 
-      - name: Read build metadata
-        id: metadata
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          metadata_files = sorted(Path("artifacts").glob("**/version.json"))
-          if not metadata_files:
-              raise SystemExit("No build metadata artifact found")
-
-          metadata = json.loads(metadata_files[0].read_text(encoding="utf-8"))
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              for key in (
-                  "source_ref",
-                  "source_sha",
-                  "source_short_sha",
-                  "upstream_version",
-                  "wheel_version",
-                  "release_version_label",
-                  "is_exact_release",
-              ):
-                  value = metadata[key]
-                  if isinstance(value, bool):
-                      value = str(value).lower()
-                  fh.write(f"{key}={value}\n")
-          PY
-
-      - name: Prepare release assets
-        run: |
-          mkdir release-assets
-          find artifacts -name "*.whl" -exec cp {} release-assets/ \;
-          # for file in release-assets/*.whl; do
-          #   mv "$file" "${file/pymol/pymol_open_source}"
-          # done
-          echo "Release assets:"
-          ls -la release-assets/
+      - name: Download build metadata
+        uses: actions/download-artifact@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.find-build.outputs.run-id }}
+          name: build-metadata
+          path: metadata
 
       - name: Create GitHub release with wheels
-        uses: actions/github-script@v8
         env:
-          SOURCE_REF: ${{ steps.metadata.outputs.source_ref }}
-          SOURCE_SHA: ${{ steps.metadata.outputs.source_sha }}
-          UPSTREAM_VERSION: ${{ steps.metadata.outputs.upstream_version }}
-          WHEEL_VERSION: ${{ steps.metadata.outputs.wheel_version }}
-          RELEASE_VERSION_LABEL: ${{ steps.metadata.outputs.release_version_label }}
-          IS_EXACT_RELEASE: ${{ steps.metadata.outputs.is_exact_release }}
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const releaseVersionLabel = process.env.RELEASE_VERSION_LABEL;
-            const upstreamVersion = process.env.UPSTREAM_VERSION;
-            const wheelVersion = process.env.WHEEL_VERSION;
-            const sourceRef = process.env.SOURCE_REF;
-            const sourceSha = process.env.SOURCE_SHA;
-            const isExactRelease = process.env.IS_EXACT_RELEASE === 'true';
-            const releaseTag = `pymol-${releaseVersionLabel}`;
-            const releaseName = `PyMOL ${releaseVersionLabel}`;
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          meta() { jq -r ".$1" metadata/version.json; }
+          label=$(meta release_version_label)
+          tag="pymol-${label}"
 
-            try {
-              // Create the release
-              const release = await github.rest.repos.createRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag_name: releaseTag,
-                name: releaseName,
-                make_latest: isExactRelease ? "true" : "false",
-                body: `PyMOL wheels built and ready for download.
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "::warning::Release ${tag} already exists, skipping creation"
+            exit 0
+          fi
 
-            **Source:** https://github.com/schrodinger/pymol-open-source/
-            **PyMOL ref:** \`${sourceRef}\`
-            **PyMOL commit:** \`${sourceSha}\`
-            **Upstream version:** \`${upstreamVersion}\`
-            **Wheel version:** \`${wheelVersion}\`
+          echo "Release assets:"
+          ls -la release-assets/
+          pythons=$(ls release-assets | sed -n 's/.*-cp3\([0-9]*\)-cp3.*/3.\1/p' | sort -u -t . -k 2,2n | paste -s -d , - | sed 's/,/, /g')
 
-            ## Installation
+          cat > notes.md <<EOF
+          PyMOL wheels built and ready for download.
 
-            Download the wheel file for your platform and install with:
-            \`\`\`bash
-            pip install pymol-*.whl
-            \`\`\`
+          **Source:** https://github.com/schrodinger/pymol-open-source/
+          **PyMOL ref:** \`$(meta source_ref)\`
+          **PyMOL commit:** \`$(meta source_sha)\`
+          **Upstream version:** \`$(meta upstream_version)\`
+          **Wheel version:** \`$(meta wheel_version)\`
 
-            Or install from PyPI:
-            \`\`\`bash
-            pip install pymol-open-source
-            \`\`\`
+          ## Installation
 
-            ## What's included
+          Download the wheel file for your platform and install with:
+          \`\`\`bash
+          pip install pymol_open_source-*.whl
+          \`\`\`
 
-            - Linux wheels (x86_64)
-            - Windows wheels (x86_64)
-            - macOS wheels (x86_64, arm64)
-            - Python 3.9, 3.10, 3.11, 3.12, 3.13 support
+          Or install from PyPI:
+          \`\`\`bash
+          pip install pymol-open-source
+          \`\`\`
 
-            Built automatically from PyMOL upstream source using official build instructions.`,
-                draft: false,
-                prerelease: !isExactRelease
-              });
+          ## What's included
 
-              console.log('✅ GitHub release created:', release.data.html_url);
+          - Linux wheels (x86_64)
+          - Windows wheels (x86_64)
+          - macOS wheels (x86_64, arm64)
+          - Python ${pythons} support
 
-              // Upload wheel files as release assets
-              const assetsDir = './release-assets';
-              const files = fs.readdirSync(assetsDir);
-              for (const file of files) {
-                if (file.endsWith('.whl')) {
-                  const filePath = path.join(assetsDir, file);
-                  const fileContent = fs.readFileSync(filePath);
+          Built automatically from PyMOL upstream source using official build instructions.
+          EOF
 
-                  await github.rest.repos.uploadReleaseAsset({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    release_id: release.data.id,
-                    name: file,
-                    data: fileContent,
-                  });
+          if [ "$(meta is_exact_release)" = "true" ]; then
+            flags=(--latest)
+          else
+            flags=(--prerelease --latest=false)
+          fi
 
-                  console.log(`✅ Uploaded ${file} to release`);
-                }
-              }
-
-            } catch (error) {
-              if (error.message.includes('already_exists')) {
-                console.log('⚠️ Release already exists, skipping creation');
-              } else {
-                console.error('❌ Failed to create GitHub release:', error.message);
-                throw error;
-              }
-            }
+          gh release create "$tag" release-assets/*.whl \
+            --title "PyMOL ${label}" --notes-file notes.md "${flags[@]}"

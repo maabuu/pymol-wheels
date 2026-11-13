@@ -4,120 +4,137 @@ on:
   workflow_dispatch:
     inputs:
       pymol_version:
-        description: "PyMOL ref: dev, latest, tag, branch, or commit SHA"
+        description: "PyMOL ref: dev (default branch), latest (newest version tag), tag, branch, or commit SHA"
         required: false
         default: "dev"
         type: string
+      python_versions:
+        description: "Python versions to build for (JSON list)"
+        required: false
+        default: '["3.11", "3.12", "3.13", "3.14"]'
+        type: string
 
-env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  PYMOL_VERSION: ${{ inputs.pymol_version || 'dev' }}
+permissions:
+  contents: read
+
+# The build jobs follow the recipe of upstream's own CI
+# (schrodinger/pymol-open-source: .github/workflows/build.yml): build with the
+# C++ tests enabled, run the test suite, then build the wheel that is shipped.
+# This recipe needs PyMOL sources newer than v3.1.0 (the `json` build option).
+#
+# Each wheel is then renamed to `pymol-open-source`, given the version resolved
+# below, repaired so that it bundles its shared libraries, and finally installed
+# and imported in a fresh environment that has none of the build dependencies.
 
 jobs:
   # --------------------------
   # Resolve source and version metadata
   # --------------------------
-  detect-version:
-    name: Resolve PyMOL Source
+  resolve:
+    name: Resolve PyMOL source
     runs-on: ubuntu-latest
     outputs:
-      source_ref: ${{ steps.resolve-ref.outputs.ref }}
       source_sha: ${{ steps.metadata.outputs.source_sha }}
-      source_short_sha: ${{ steps.metadata.outputs.source_short_sha }}
-      upstream_version: ${{ steps.metadata.outputs.upstream_version }}
       wheel_version: ${{ steps.metadata.outputs.wheel_version }}
-      release_version_label: ${{ steps.metadata.outputs.release_version_label }}
-      is_exact_release: ${{ steps.metadata.outputs.is_exact_release }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Resolve PyMOL ref
         id: resolve-ref
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
-          REQUESTED_REF: ${{ env.PYMOL_VERSION }}
+          REQUESTED_REF: ${{ inputs.pymol_version }}
         with:
           script: |
-            const requested = (process.env.REQUESTED_REF || 'dev').trim();
             const owner = 'schrodinger';
             const repo = 'pymol-open-source';
-            const repoInfo = await github.rest.repos.get({ owner, repo });
+            const requested = (process.env.REQUESTED_REF || '').trim() || 'dev';
 
             let ref = requested;
-            if (!requested || requested === 'dev') {
-              ref = repoInfo.data.default_branch;
+            if (requested === 'dev') {
+              ref = (await github.rest.repos.get({ owner, repo })).data.default_branch;
             } else if (requested === 'latest') {
-              const release = await github.rest.repos.getLatestRelease({ owner, repo });
-              ref = release.data.tag_name;
+              // Upstream publishes version tags but no GitHub releases.
+              const tags = await github.paginate(github.rest.repos.listTags, { owner, repo, per_page: 100 });
+              const versions = tags
+                .map((tag) => tag.name)
+                .filter((name) => /^v\d+(\.\d+)*$/.test(name))
+                .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+              if (versions.length === 0) {
+                core.setFailed('No version tags found upstream');
+                return;
+              }
+              ref = versions[versions.length - 1];
             } else if (/^\d+\.\d+(\.\d+)?$/.test(requested)) {
               ref = `v${requested}`;
             }
 
-            core.notice(`Resolved PyMOL ref "${requested || 'dev'}" to "${ref}"`);
+            core.notice(`Resolved PyMOL ref "${requested}" to "${ref}"`);
             core.setOutput('ref', ref);
 
+      # Full history: the commit count is part of the development version.
       - name: Checkout PyMOL source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: schrodinger/pymol-open-source
           ref: ${{ steps.resolve-ref.outputs.ref }}
           path: pymol-source
           fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
+          persist-credentials: false
 
       - name: Determine PyMOL build metadata
         id: metadata
+        env:
+          SOURCE_REF: ${{ steps.resolve-ref.outputs.ref }}
         run: |
-          python .github/scripts/resolve_pymol_build_metadata.py \
+          python3 .github/scripts/resolve_pymol_build_metadata.py \
             --repo-dir pymol-source \
             --json-out build-metadata/version.json \
-            --source-ref "${{ steps.resolve-ref.outputs.ref }}"
+            --source-ref "$SOURCE_REF"
+          {
+            echo '### PyMOL build metadata'
+            echo '```json'
+            cat build-metadata/version.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build metadata
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: pymol-build-metadata
+          name: build-metadata
           path: build-metadata/version.json
+          if-no-files-found: error
 
   # --------------------------
   # Build Linux wheels
   # --------------------------
-  build-Linux:
+  linux:
+    name: Linux x86_64 (py${{ matrix.python-version }})
+    needs: resolve
     runs-on: ubuntu-22.04
-    needs: detect-version
 
     strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
       fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(inputs.python_versions) }}
+
+    env:
+      WHEEL_VERSION: ${{ needs.resolve.outputs.wheel_version }}
 
     steps:
       - name: Get source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: schrodinger/pymol-open-source
-          ref: ${{ needs.detect-version.outputs.source_ref }}
+          ref: ${{ needs.resolve.outputs.source_sha }}
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Report version
-        run: |
-          echo "Building PyMOL wheel:"
-          echo "  Source ref: ${{ needs.detect-version.outputs.source_ref }}"
-          echo "  Source SHA: ${{ needs.detect-version.outputs.source_sha }}"
-          echo "  Upstream version: ${{ needs.detect-version.outputs.upstream_version }}"
-          echo "  Wheel version: ${{ needs.detect-version.outputs.wheel_version }}"
-          echo "  Release label: ${{ needs.detect-version.outputs.release_version_label }}"
-          echo "  Python version: ${{ matrix.python-version }}"
 
       - name: Install system dependencies
         run: |
@@ -129,10 +146,9 @@ jobs:
               libglm-dev \
               libmsgpack-dev \
               libnetcdf-dev \
+              nlohmann-json3-dev \
               libpng-dev \
               libxml2-dev
-          wget -nv https://anaconda.org/schrodinger/collada2gltf/2.1.4/download/linux-64/collada2gltf-2.1.4-h6bb024c_0.tar.bz2
-          sudo tar xf collada2gltf-*.tar.bz2 -C / bin/collada2gltf
 
       - name: Get additional sources
         run: |
@@ -142,238 +158,267 @@ jobs:
       - name: Build
         run: |
           pip install --upgrade pip
-          pip install -v --config-settings testing=True '.[dev]'
+          pip install -v --config-settings testing=True --config-settings json=True '.[dev]'
 
       - name: Test
-        run: |
-          pymol -ckqy testing/testing.py --run all
+        run: pymol -ckqy testing/testing.py --run all
 
       - name: Build wheel
-        run: |
-          pip install --upgrade pip build wheel
-          python -m build --wheel
+        run: pip wheel . --no-deps --wheel-dir dist --config-settings json=True
 
-      - name: Rename wheel
+      - name: Rename and version wheel
         run: |
-          pip install "wheel<0.45"
-          pip install wheeledit auditwheel patchelf change-wheel-version
-          wheeledit dist/*.whl --rename=pymol-open-source
-          if [ "${{ needs.detect-version.outputs.is_exact_release }}" != "true" ]; then
+          pip install "wheel<0.45" wheeledit change-wheel-version
+          wheeledit dist/pymol-*.whl --rename=pymol-open-source
+          rm dist/pymol-*.whl
+          if ! compgen -G "dist/pymol_open_source-${WHEEL_VERSION}-*.whl" > /dev/null; then
             python -m change_wheel_version dist/pymol_open_source-*.whl \
-              --local-version "g${{ needs.detect-version.outputs.source_short_sha }}"
+              --version "$WHEEL_VERSION" --delete-old-wheel
           fi
-          auditwheel repair dist/pymol_open_source-*.whl
+
+      - name: Repair wheel
+        run: |
+          pip install auditwheel patchelf
+          auditwheel repair --wheel-dir wheelhouse dist/pymol_open_source-*.whl
+
+      - name: Test repaired wheel
+        timeout-minutes: 10
+        env:
+          TEST_PYTHON: python
+        run: |
+          "$TEST_PYTHON" -m venv "$RUNNER_TEMP/wheel-test"
+          python="$RUNNER_TEMP/wheel-test/bin/python"
+          [ -x "$python" ] || python="$RUNNER_TEMP/wheel-test/Scripts/python.exe"
+          "$python" -m pip install wheelhouse/pymol_open_source-*.whl
+          "$python" -I -c "from pymol import cmd; cmd.fragment('ala'); print('PyMOL', cmd.get_version()[0], '-', cmd.count_atoms(), 'atoms'); assert cmd.count_atoms() > 0"
 
       - name: Upload wheel
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: pymol-linux-${{ matrix.python-version }}
-          # path: dist/pymol_open_source*.whl
-          path: wheelhouse/pymol_open_source*.whl
+          name: pymol-linux-x86_64-py${{ matrix.python-version }}
+          path: wheelhouse/pymol_open_source-*.whl
+          if-no-files-found: error
 
   # --------------------------
   # Build Windows wheels
   # --------------------------
-  build-Windows:
+  windows:
+    name: Windows x86_64 (py${{ matrix.python-version }})
+    needs: resolve
     runs-on: windows-latest
-    needs: detect-version
 
     strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
       fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(inputs.python_versions) }}
 
     env:
-      CONDA_ENV_NAME: "testing_env"
+      WHEEL_VERSION: ${{ needs.resolve.outputs.wheel_version }}
 
     steps:
       - name: Get source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: schrodinger/pymol-open-source
-          ref: ${{ needs.detect-version.outputs.source_ref }}
+          ref: ${{ needs.resolve.outputs.source_sha }}
+          persist-credentials: false
 
-      - name: Install Miniforge
-        run: |
-          choco install miniforge3
+      - name: Set up conda environment
+        uses: conda-incubator/setup-miniconda@v4
+        with:
+          miniforge-version: latest
+          python-version: ${{ matrix.python-version }}
+          activate-environment: build
+          channels: conda-forge
+          conda-remove-defaults: true
 
-      - name: Add conda to PATH
-        run: |
-          echo "$env:CONDA" | Out-File -Append -FilePath $env:GITHUB_PATH
-          echo "$env:CONDA\Scripts" | Out-File -Append -FilePath $env:GITHUB_PATH
-
-      - name: Set up Miniforge
-        run: |
-          conda init powershell
-          conda create --name $env:CONDA_ENV_NAME -c conda-forge -c schrodinger `
-              python=${{ matrix.python-version }} `
-              pip `
-              catch2=2.13.3 `
-              collada2gltf `
-              freetype `
-              glew `
-              glm `
-              libpng `
-              libxml2 `
-              libnetcdf `
-
-      - name: Report version
-        run: |
-          echo "Building PyMOL wheel:"
-          echo "  Source ref: ${{ needs.detect-version.outputs.source_ref }}"
-          echo "  Source SHA: ${{ needs.detect-version.outputs.source_sha }}"
-          echo "  Upstream version: ${{ needs.detect-version.outputs.upstream_version }}"
-          echo "  Wheel version: ${{ needs.detect-version.outputs.wheel_version }}"
-          echo "  Release label: ${{ needs.detect-version.outputs.release_version_label }}"
-          echo "  Python version: ${{ matrix.python-version }}"
+      - name: Install dependencies
+        run: >-
+          conda install --yes
+          catch2=2.13.3
+          freetype
+          glew
+          glm
+          libpng
+          libxml2-devel
+          libnetcdf
+          nlohmann_json
 
       - name: Get additional sources
         run: |
-          conda activate $env:CONDA_ENV_NAME
-
           git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
           Copy-Item -Recurse -Path mmtf-cpp/include\* -Destination "$env:CONDA_PREFIX\Library\include"
           git clone --depth 1 --single-branch --branch cpp_master https://github.com/msgpack/msgpack-c.git
           Copy-Item -Recurse -Path msgpack-c/include\* -Destination "$env:CONDA_PREFIX\Library\include"
-          dir $env:CONDA_PREFIX\Library\include
 
-      - name: Build PyMOL
-        run: |
-          conda activate $env:CONDA_ENV_NAME
-          pip install -v --config-settings testing=True .[dev]
+      - name: Build
+        run: pip install -v --config-settings testing=True --config-settings json=True .[dev]
 
       - name: Test
-        run: |
-          conda activate $env:CONDA_ENV_NAME
-          pymol -ckqy testing\testing.py --run all
+        run: pymol -ckqy testing\testing.py --run all
 
       - name: Build wheel
-        run: |
-          conda activate $env:CONDA_ENV_NAME
-          pip install --upgrade pip build wheel setuptools
-          python setup.py bdist_wheel --testing=false
+        run: pip wheel . --no-deps --wheel-dir dist --config-settings json=True
 
-      - name: Rename wheel
+      - name: Rename and version wheel
+        shell: bash -el {0}
         run: |
-          conda activate $env:CONDA_ENV_NAME
-          pip install "wheel<0.45"
-          pip install --upgrade wheeledit change-wheel-version
-          Get-ChildItem dist
-          $wheel = Get-ChildItem dist/*.whl | Select-Object -First 1
-          wheeledit $wheel.FullName --rename=pymol-open-source
-          if ("${{ needs.detect-version.outputs.is_exact_release }}" -ne "true") {
-            $wheel = Get-ChildItem dist/pymol_open_source*.whl | Select-Object -First 1
-            python -m change_wheel_version $wheel.FullName `
-              --local-version "g${{ needs.detect-version.outputs.source_short_sha }}"
-          }
+          pip install "wheel<0.45" wheeledit change-wheel-version
+          wheeledit dist/pymol-*.whl --rename=pymol-open-source
+          rm dist/pymol-*.whl
+          if ! compgen -G "dist/pymol_open_source-${WHEEL_VERSION}-*.whl" > /dev/null; then
+            python -m change_wheel_version dist/pymol_open_source-*.whl \
+              --version "$WHEEL_VERSION" --delete-old-wheel
+          fi
+
+      # Bundle the conda DLLs (libpng, freetype, GLEW, libxml2, netCDF, ...).
+      - name: Install delvewheel
+        run: pip install delvewheel
+
+      - name: Repair wheel
+        run: delvewheel repair -v --add-path "$env:CONDA_PREFIX\Library\bin" --wheel-dir wheelhouse dist\pymol_open_source-*.whl
+
+      # A Python that knows nothing about the conda environment.
+      - name: Set up Python for testing the wheel
+        id: test-python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          update-environment: false
+
+      - name: Test repaired wheel
+        shell: bash
+        timeout-minutes: 10
+        env:
+          TEST_PYTHON: ${{ steps.test-python.outputs.python-path }}
+        run: |
+          "$TEST_PYTHON" -m venv "$RUNNER_TEMP/wheel-test"
+          python="$RUNNER_TEMP/wheel-test/bin/python"
+          [ -x "$python" ] || python="$RUNNER_TEMP/wheel-test/Scripts/python.exe"
+          "$python" -m pip install wheelhouse/pymol_open_source-*.whl
+          "$python" -I -c "from pymol import cmd; cmd.fragment('ala'); print('PyMOL', cmd.get_version()[0], '-', cmd.count_atoms(), 'atoms'); assert cmd.count_atoms() > 0"
 
       - name: Upload wheel
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: pymol-windows-${{ matrix.python-version }}
-          path: dist/pymol_open_source*.whl
+          name: pymol-windows-x86_64-py${{ matrix.python-version }}
+          path: wheelhouse/pymol_open_source-*.whl
+          if-no-files-found: error
 
   # --------------------------
   # Build macOS wheels
   # --------------------------
-  build-MacOS:
-    runs-on: macos-latest
-    needs: detect-version
+  macos:
+    name: macOS ${{ matrix.arch }} (py${{ matrix.python-version }})
+    needs: resolve
+    runs-on: ${{ matrix.runner }}
 
     strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        arch: ["x86_64", "arm64"]
       fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(inputs.python_versions) }}
+        arch: [x86_64, arm64]
+        include:
+          - arch: x86_64
+            runner: macos-26-intel
+          - arch: arm64
+            runner: macos-latest
+
+    defaults:
+      run:
+        # Login shell, so that the conda environment is activated.
+        shell: bash -el {0}
 
     env:
-      CONDA_ROOT: "/tmp/miniforge"
-      CONDA_ENV_NAME: "testing_env"
+      WHEEL_VERSION: ${{ needs.resolve.outputs.wheel_version }}
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
 
     steps:
       - name: Get source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: schrodinger/pymol-open-source
-          ref: ${{ needs.detect-version.outputs.source_ref }}
+          ref: ${{ needs.resolve.outputs.source_sha }}
+          persist-credentials: false
 
-      - name: Download Miniforge
-        run: |
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/download/24.11.0-0/Miniforge3-MacOSX-arm64.sh"
-          else
-            MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/download/24.11.0-0/Miniforge3-MacOSX-x86_64.sh"
-          fi
-          curl -L -o $CONDA_ROOT.sh $MINIFORGE_URL
-          bash $CONDA_ROOT.sh -b -p $CONDA_ROOT
+      - name: Set up conda environment
+        uses: conda-incubator/setup-miniconda@v4
+        with:
+          miniforge-version: latest
+          python-version: ${{ matrix.python-version }}
+          activate-environment: build
+          channels: conda-forge
+          conda-remove-defaults: true
 
-      - name: Add conda to PATH
-        run: |
-          echo "${CONDA_ROOT}/bin" >> "$GITHUB_PATH"
-
-      - name: Set up Miniforge
-        run: |
-          conda create --name $CONDA_ENV_NAME -c conda-forge -c schrodinger \
-              python=${{ matrix.python-version }} \
-              pip \
-              catch2=2.13.3 \
-              collada2gltf \
-              freetype \
-              glew \
-              glm \
-              libpng \
-              libxml2 \
-              libnetcdf
-
-      - name: Report version
-        run: |
-          echo "Building PyMOL wheel:"
-          echo "  Source ref: ${{ needs.detect-version.outputs.source_ref }}"
-          echo "  Source SHA: ${{ needs.detect-version.outputs.source_sha }}"
-          echo "  Upstream version: ${{ needs.detect-version.outputs.upstream_version }}"
-          echo "  Wheel version: ${{ needs.detect-version.outputs.wheel_version }}"
-          echo "  Release label: ${{ needs.detect-version.outputs.release_version_label }}"
-          echo "  Python version: ${{ matrix.python-version }}"
-          echo "  Architecture: ${{ matrix.arch }}"
+      # Upstream pins catch2=2.13.3, which has no osx-arm64 build.
+      - name: Install dependencies
+        run: >-
+          conda install --yes
+          catch2=2.13
+          freetype
+          glew
+          glm
+          libpng
+          libxml2-devel
+          libnetcdf
+          nlohmann_json
 
       - name: Get additional sources
         run: |
-          source activate $CONDA_ENV_NAME
           git clone --depth 1 https://github.com/rcsb/mmtf-cpp.git
-          cp -R mmtf-cpp/include/* ${CONDA_PREFIX}/include/
+          cp -R mmtf-cpp/include/* "${CONDA_PREFIX}/include/"
           git clone --depth 1 --single-branch --branch cpp_master https://github.com/msgpack/msgpack-c.git
-          cp -R msgpack-c/include/* ${CONDA_PREFIX}/include/
+          cp -R msgpack-c/include/* "${CONDA_PREFIX}/include/"
 
-      - name: Build PyMOL
-        run: |
-          source activate $CONDA_ENV_NAME
-          export MACOSX_DEPLOYMENT_TARGET=12.0
-          pip install -v --config-settings testing=True '.[dev]'
+      - name: Build
+        run: pip install -v --config-settings testing=True --config-settings json=True '.[dev]'
 
       - name: Test
-        run: |
-          source activate $CONDA_ENV_NAME
-          pymol -ckqy testing/testing.py --run all
+        run: pymol -ckqy testing/testing.py --run all
 
       - name: Build wheel
-        run: |
-          source activate $CONDA_ENV_NAME
-          export MACOSX_DEPLOYMENT_TARGET=12.0
-          pip install --upgrade pip build wheel setuptools
-          python setup.py bdist_wheel --testing=false
+        run: pip wheel . --no-deps --wheel-dir dist --config-settings json=True
 
-      - name: Rename wheel
+      - name: Rename and version wheel
         run: |
-          pip install "wheel<0.45"
-          pip install wheeledit change-wheel-version
-          wheeledit dist/*.whl --rename=pymol-open-source
-          if [ "${{ needs.detect-version.outputs.is_exact_release }}" != "true" ]; then
+          pip install "wheel<0.45" wheeledit change-wheel-version
+          wheeledit dist/pymol-*.whl --rename=pymol-open-source
+          rm dist/pymol-*.whl
+          if ! compgen -G "dist/pymol_open_source-${WHEEL_VERSION}-*.whl" > /dev/null; then
             python -m change_wheel_version dist/pymol_open_source-*.whl \
-              --local-version "g${{ needs.detect-version.outputs.source_short_sha }}"
+              --version "$WHEEL_VERSION" --delete-old-wheel
           fi
 
-      - name: Upload wheel
-        uses: actions/upload-artifact@v6
+      # Bundle the conda dylibs (libpng, freetype, GLEW, libxml2, netCDF, ...).
+      - name: Repair wheel
+        run: |
+          pip install delocate
+          delocate-wheel -v --sanitize-rpaths --wheel-dir wheelhouse dist/pymol_open_source-*.whl
+          delocate-listdeps wheelhouse/pymol_open_source-*.whl
+
+      # A Python that knows nothing about the conda environment.
+      - name: Set up Python for testing the wheel
+        id: test-python
+        uses: actions/setup-python@v7
         with:
-          name: pymol-macos-py${{ matrix.python-version }}-${{ matrix.arch }}
-          path: dist/pymol_open_source*.whl
+          python-version: ${{ matrix.python-version }}
+          update-environment: false
+
+      - name: Test repaired wheel
+        shell: bash
+        timeout-minutes: 10
+        env:
+          TEST_PYTHON: ${{ steps.test-python.outputs.python-path }}
+        run: |
+          "$TEST_PYTHON" -m venv "$RUNNER_TEMP/wheel-test"
+          python="$RUNNER_TEMP/wheel-test/bin/python"
+          [ -x "$python" ] || python="$RUNNER_TEMP/wheel-test/Scripts/python.exe"
+          "$python" -m pip install wheelhouse/pymol_open_source-*.whl
+          "$python" -I -c "from pymol import cmd; cmd.fragment('ala'); print('PyMOL', cmd.get_version()[0], '-', cmd.count_atoms(), 'atoms'); assert cmd.count_atoms() > 0"
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: pymol-macos-${{ matrix.arch }}-py${{ matrix.python-version }}
+          path: wheelhouse/pymol_open_source-*.whl
+          if-no-files-found: error
